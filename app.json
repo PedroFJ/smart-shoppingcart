@@ -30,7 +30,9 @@
           "microphonePermission": "Permitir que a Smart Shoppingcart use o microfone para pesquisa por voz.",
           "speechRecognitionPermission": "Permitir que a Smart Shoppingcart use reconhecimento de voz para pesquisa."
         }
-      ]
+      ],
+      "expo-router",
+      "expo-localization"
     ],
     "extra": {
       "eas": {
