@@ -17,6 +17,7 @@ type SyncState = {
   setRemoteReady: (remoteReady: boolean) => void;
   setRemoteApplyInProgress: (remoteApplyInProgress: boolean) => void;
   setLastRemoteSavedAt: (lastRemoteSavedAt: string) => void;
+  hydrateFromLegacy: () => void;
 };
 
 const initialSyncSpaceId = getInitialSyncSpaceId();
@@ -43,5 +44,6 @@ export const useSyncStore = create<SyncState>()((set) => ({
   setSyncStatus: (syncStatus, syncMessage) => set({ syncStatus, syncMessage }),
   setRemoteReady: (remoteReady) => set({ remoteReady }),
   setRemoteApplyInProgress: (remoteApplyInProgress) => set({ remoteApplyInProgress }),
-  setLastRemoteSavedAt: (lastRemoteSavedAt) => set({ lastRemoteSavedAt })
+  setLastRemoteSavedAt: (lastRemoteSavedAt) => set({ lastRemoteSavedAt }),
+  hydrateFromLegacy: () => undefined
 }));

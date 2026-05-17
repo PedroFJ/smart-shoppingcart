@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { createAppJsonStorage, readLegacyAppState, shouldImportLegacyState } from "./persistence";
-import { DepartmentFilter, ShoppingItem } from "./types";
+import { DepartmentFilter, PersistedAppState, ShoppingItem } from "./types";
 
 const legacyState = shouldImportLegacyState() ? readLegacyAppState() : null;
 
@@ -18,6 +18,7 @@ type ShoppingListState = {
   setDepartmentFilter: (departmentFilter: DepartmentFilter) => void;
   setListSearch: (listSearch: string) => void;
   setAddSearch: (addSearch: string) => void;
+  hydrateFromLegacy: (legacyState: PersistedAppState | null) => void;
 };
 
 export const useShoppingListStore = create<ShoppingListState>()(
@@ -34,7 +35,20 @@ export const useShoppingListStore = create<ShoppingListState>()(
       setShoppingDoneNotice: (shoppingDoneNotice) => set({ shoppingDoneNotice }),
       setDepartmentFilter: (departmentFilter) => set({ departmentFilter }),
       setListSearch: (listSearch) => set({ listSearch }),
-      setAddSearch: (addSearch) => set({ addSearch })
+      setAddSearch: (addSearch) => set({ addSearch }),
+      hydrateFromLegacy: (nextLegacyState) => {
+        if (!nextLegacyState) {
+          return;
+        }
+
+        set({
+          shoppingItems: nextLegacyState.shoppingItems,
+          shoppingDoneNotice: nextLegacyState.shoppingDoneNotice,
+          departmentFilter: nextLegacyState.departmentFilter,
+          listSearch: nextLegacyState.listSearch,
+          addSearch: ""
+        });
+      }
     }),
     {
       name: "smart-shoppingcart:shopping-list-store:v1",

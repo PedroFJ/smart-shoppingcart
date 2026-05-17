@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { defaultItinerary } from "../data/sampleData";
 import { createAppJsonStorage, readLegacyAppState, shouldImportLegacyState } from "./persistence";
-import { StoreItineraries, StoreProductOrders, StoreStopOrders, SupermarketProfile } from "./types";
+import { PersistedAppState, StoreItineraries, StoreProductOrders, StoreStopOrders, SupermarketProfile } from "./types";
 
 export const supermarketProfiles: SupermarketProfile[] = [
   { id: "supercor", name: "SuperCor", detail: "Percurso principal" },
@@ -52,6 +52,7 @@ type StoresState = {
   setStoreItineraries: (storeItineraries: StoreItineraries) => void;
   setStoreStopOrders: (storeStopOrders: StoreStopOrders) => void;
   setStoreProductOrders: (storeProductOrders: StoreProductOrders) => void;
+  hydrateFromLegacy: (legacyState: PersistedAppState | null) => void;
 };
 
 export const useStoresStore = create<StoresState>()(
@@ -64,7 +65,19 @@ export const useStoresStore = create<StoresState>()(
       selectStore: (selectedStoreId) => set({ selectedStoreId }),
       setStoreItineraries: (storeItineraries) => set({ storeItineraries }),
       setStoreStopOrders: (storeStopOrders) => set({ storeStopOrders }),
-      setStoreProductOrders: (storeProductOrders) => set({ storeProductOrders })
+      setStoreProductOrders: (storeProductOrders) => set({ storeProductOrders }),
+      hydrateFromLegacy: (nextLegacyState) => {
+        if (!nextLegacyState) {
+          return;
+        }
+
+        set({
+          selectedStoreId: nextLegacyState.selectedStoreId,
+          storeItineraries: nextLegacyState.storeItineraries,
+          storeStopOrders: nextLegacyState.storeStopOrders,
+          storeProductOrders: nextLegacyState.storeProductOrders
+        });
+      }
     }),
     {
       name: "smart-shoppingcart:stores-store:v1",

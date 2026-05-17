@@ -12,6 +12,7 @@ type SettingsState = LocalUserSettings & {
   setDefaultStoreId: (defaultStoreId: string) => void;
   setSmartStartEnabled: (smartStartEnabled: boolean) => void;
   setLocale: (locale: string) => void;
+  hydrateFromLegacy: (settings: LocalUserSettings) => void;
 };
 
 export const useSettingsStore = create<SettingsState>()(
@@ -22,7 +23,8 @@ export const useSettingsStore = create<SettingsState>()(
       setVoiceSearchEnabled: (voiceSearchEnabled) => set({ voiceSearchEnabled }),
       setDefaultStoreId: (defaultStoreId) => set({ defaultStoreId }),
       setSmartStartEnabled: (smartStartEnabled) => set({ smartStartEnabled }),
-      setLocale: (locale) => set({ locale })
+      setLocale: (locale) => set({ locale }),
+      hydrateFromLegacy: (settings) => set(settings)
     }),
     {
       name: "smart-shoppingcart:settings-store:v1",

@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { createAppJsonStorage, readLegacyAppState, shouldImportLegacyState } from "./persistence";
+import { PersistedAppState } from "./types";
 
 const legacyState = shouldImportLegacyState() ? readLegacyAppState() : null;
 
@@ -14,6 +15,7 @@ type TripState = {
   setActiveTripItemIds: (activeTripItemIds: string[]) => void;
   setTripMode: (tripMode: "normal" | "training") => void;
   resetTrip: () => void;
+  hydrateFromLegacy: (legacyState: PersistedAppState | null) => void;
 };
 
 export const useTripStore = create<TripState>()(
@@ -32,7 +34,19 @@ export const useTripStore = create<TripState>()(
         lockedPickingIds: [],
         activeTripItemIds: [],
         tripMode: "normal"
-      })
+      }),
+      hydrateFromLegacy: (nextLegacyState) => {
+        if (!nextLegacyState) {
+          return;
+        }
+
+        set({
+          isCheckoutLocked: nextLegacyState.isCheckoutLocked,
+          lockedPickingIds: nextLegacyState.lockedPickingIds,
+          activeTripItemIds: nextLegacyState.activeTripItemIds,
+          tripMode: "normal"
+        });
+      }
     }),
     {
       name: "smart-shoppingcart:trip-store:v1",

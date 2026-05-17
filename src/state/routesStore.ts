@@ -3,7 +3,7 @@ import { persist } from "zustand/middleware";
 import { defaultItinerary, SectionId } from "../data/sampleData";
 import { PickEvent } from "../domain/routeInference";
 import { createAppJsonStorage, readLegacyAppState, shouldImportLegacyState } from "./persistence";
-import { StoreItineraries } from "./types";
+import { PersistedAppState, StoreItineraries } from "./types";
 
 const legacyState = shouldImportLegacyState() ? readLegacyAppState() : null;
 
@@ -14,6 +14,7 @@ type RoutesState = {
   setItinerary: (itinerary: SectionId[]) => void;
   setStoreItineraries: (storeItineraries: StoreItineraries) => void;
   setPickEvents: (pickEvents: PickEvent<SectionId>[]) => void;
+  hydrateFromLegacy: (legacyState: PersistedAppState | null) => void;
 };
 
 export const useRoutesStore = create<RoutesState>()(
@@ -24,7 +25,18 @@ export const useRoutesStore = create<RoutesState>()(
       pickEvents: legacyState?.pickEvents ?? [],
       setItinerary: (itinerary) => set({ itinerary }),
       setStoreItineraries: (storeItineraries) => set({ storeItineraries }),
-      setPickEvents: (pickEvents) => set({ pickEvents })
+      setPickEvents: (pickEvents) => set({ pickEvents }),
+      hydrateFromLegacy: (nextLegacyState) => {
+        if (!nextLegacyState) {
+          return;
+        }
+
+        set({
+          itinerary: nextLegacyState.itinerary,
+          storeItineraries: nextLegacyState.storeItineraries,
+          pickEvents: nextLegacyState.pickEvents
+        });
+      }
     }),
     {
       name: "smart-shoppingcart:routes-store:v1",

@@ -5,11 +5,13 @@ type AuthState = {
   householdId: string | null;
   setUser: (userId: string | null) => void;
   setHousehold: (householdId: string | null) => void;
+  hydrateFromLegacy: () => void;
 };
 
 export const useAuthStore = create<AuthState>()((set) => ({
   userId: null,
   householdId: null,
   setUser: (userId) => set({ userId }),
-  setHousehold: (householdId) => set({ householdId })
+  setHousehold: (householdId) => set({ householdId }),
+  hydrateFromLegacy: () => undefined
 }));

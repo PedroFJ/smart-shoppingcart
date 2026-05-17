@@ -361,3 +361,53 @@ Next recommended step:
 - Execute Commit 3: scaffold i18n catalogue and wrap `app/_layout.tsx` with `I18nextProvider`, still with no screen extraction and no user-facing copy changes.
 
 Signed-off-by: Codex <codex@openai.com>
+
+### 2026-05-17 21:53 Europe/Lisbon - Codex
+
+Status: Commit 3 infrastructure is implemented. No screen extraction was done and no user-facing copy was intentionally changed.
+
+References:
+
+- `docs/commit-3-i18n-brief.md`
+- Plan §3, Commit 3
+- Plan §6 persistence hydration race warning
+- Plan §8 execution log requirements
+
+Completed:
+
+- Added the i18n foundation under `src/i18n/`:
+  - `index.ts`
+  - `format.ts`
+  - `README.md`
+  - empty `en` and `pt-PT` namespace files for the twelve planned namespaces
+  - placeholder `pt-BR` and `es` locale folders
+- Set the locale policy in code:
+  - `en` remains the source-key namespace for translators
+  - `pt-PT` remains the runtime default for household testing
+  - `pt-BR` falls back through `pt-PT` then `en`
+  - `es` falls back to `en`
+- Wrapped the router stack in `I18nextProvider`.
+- Added `bootstrapLegacyState()` at module scope in `app/_layout.tsx`, before routed screens render.
+- Added per-store `hydrateFromLegacy(...)` actions so the legacy `smart-shoppingcart:v1` blob can be imported once before store consumers mount.
+- Added the warning-only `scripts/i18n-check.mjs` guard and wired it as `npm run i18n:check`.
+
+Validation:
+
+- `npm run typecheck` passed.
+- `npm run i18n:check` passed in warning mode with no plain JSX text nodes found.
+- `npx expo export --platform web --clear --output-dir dist-router-smoke` passed; the temporary export folder was deleted after validation.
+- Hydration guard smoke test passed with a seeded legacy blob:
+  - first bootstrap imported the legacy product, shopping item, search/filter/settings data and wrote the legacy-import marker
+  - second bootstrap skipped the import after the marker was present, confirming the guard is idempotent
+
+Warnings:
+
+- Browser visual smoke for Commit 3 could not be completed in the in-app browser because the Browser Use tool rejected the local target under its URL policy. The web export build passed, but this specific visual/no-console browser check remains unverified for this commit.
+- The hydration smoke test printed `Supabase environment variables are not configured yet.` This is expected in the current local environment and was not introduced by Commit 3.
+- Commit 3 includes `docs/commit-3-i18n-brief.md` as a supporting reference document so future changelog entries can trace the exact instruction set used for this pass.
+
+Next recommended step:
+
+- Commit 4 - extract Welcome (`(auth)/welcome.tsx`). This is the first screen that will actually consume both the i18n catalogue and the zustand stores, so it is the moment the hydration guard becomes live for user-facing runtime behavior.
+
+Signed-off-by: Codex <codex@openai.com>
