@@ -362,87 +362,6 @@ Next recommended step:
 
 Signed-off-by: Codex <codex@openai.com>
 
-### 2026-05-18 00:16 Europe/Lisbon - Codex - Move to GitHub
-
-Status: pushed the repository to GitHub and resumed work from the new non-OneDrive clone at `C:\Users\PedroFreire\dev\smart-shoppingcart`. The GitHub remote was created manually by Pedro at `https://github.com/PedroFJ/smart-shoppingcart`; the initial pushed history landed at `6cabb08` before this docs-only log entry.
-
-Completed:
-
-- Rebuilt the index in the OneDrive copy with `git reset --mixed HEAD` without restoring the working tree.
-- Audited `.gitignore` before the first push.
-- Scanned tracked files for secret-shaped strings before the first push.
-- Confirmed `eas.json` contains build configuration only, with no secrets.
-- Added `origin` pointing to `https://github.com/PedroFJ/smart-shoppingcart`.
-- Pushed `master` to GitHub.
-- Verified this new clone is running from `C:\Users\PedroFreire\dev\smart-shoppingcart`, outside OneDrive.
-
-Validation:
-
-- Pre-push secret scan found only placeholders and environment variable references:
-  - `.env.example`
-  - `README.md`
-  - `src/lib/supabase.ts`
-- `.git` size before push was 4.61 MB, which was reasonable for this history.
-- `git push -u origin master` succeeded.
-- `git ls-remote --heads origin` showed `master` at `6cabb08`.
-- In the new clone, `git status --short` was clean before this docs-only log entry.
-- In the new clone, `git log --oneline -3` showed `6cabb08`, `06eb964`, and `398d37f`.
-- In the new clone, `origin` fetch and push both point to `https://github.com/PedroFJ/smart-shoppingcart`.
-- In the new clone, `app/_layout.tsx` was 390 bytes with Windows line endings, matching the expected full file rather than the earlier truncated 138-byte corruption.
-
-Flags / Roadblocks:
-
-- The new clone resolves the OneDrive corruption risk for future Codex work, provided Codex/Cowork stays pointed at `C:\Users\PedroFreire\dev\smart-shoppingcart`.
-- The old OneDrive copy should be archived, not deleted immediately, once the new workspace has been confirmed in Codex/Cowork.
-- `.gitignore` should be tightened in a later docs/tooling cleanup to include broader patterns such as `.env.*`, `.expo-shared/`, and `dist*/`; this was deliberately not changed before the first GitHub push because that push needed to preserve `6cabb08` exactly.
-
-Next recommended step:
-
-- Commit 4 - extract Welcome (`(auth)/welcome.tsx`) after confirming the active Codex workspace is the new non-OneDrive path.
-
-Signed-off-by: Codex <codex@openai.com>
-
-### 2026-05-17 22:07 Europe/Lisbon - Codex - Working tree recovery
-
-Status: recovery complete on commit `06eb964` (`Pass 1 commit 3: scaffold i18n catalogue and hydration guard`). The tracked working tree is aligned with `HEAD`; only the new recovery brief documentation was left to commit.
-
-Completed:
-
-- Pedro paused OneDrive sync before recovery.
-- Pedro confirmed editors/tools with the repo open were closed, except this Codex session.
-- Rebuilt the git index by removing `.git/index` and running `git reset --mixed HEAD`.
-- Restored tracked working-tree files from `HEAD` with `git checkout -- .`.
-- Ran `npm install` for lockfile sanity; it reported the project was already up to date.
-- Pedro resumed OneDrive sync after validation.
-- Re-ran the key integrity checks after a 30-second OneDrive resume window.
-
-Validation:
-
-- `git status --short` ran without index errors and showed only `docs/working-tree-recovery-brief.md` as untracked before this log update.
-- `git log --oneline -5` showed `06eb964` at `HEAD`.
-- `app/_layout.tsx` was 376 bytes and ended with the expected closing `</I18nextProvider>` and function braces.
-- The Commit 3 execution-log heading `2026-05-17 21:53` was present exactly once.
-- `src/i18n/locales/en` contained 12 namespace JSON files.
-- `src/i18n/locales/pt-PT` contained 12 namespace JSON files.
-- `src/i18n/locales/pt-BR` contained `.gitkeep`.
-- `src/i18n/locales/es` contained `.gitkeep`.
-- `npm run typecheck` passed.
-- `npm run i18n:check` passed in warning mode with no plain JSX text nodes found.
-- After OneDrive sync was resumed and 30 seconds elapsed, `HEAD`, `_layout.tsx`, the Commit 3 log entry, and the i18n namespace counts were still correct.
-
-Flags / Roadblocks:
-
-- Pedro chose Option B: keep the repo in OneDrive for now.
-- Before every Codex session, pause OneDrive sync and confirm `git status` is clean.
-- After every Codex session, confirm `git status` is clean, resume OneDrive sync, wait about 30 seconds, and re-check `git status`.
-- Option B is workable but brittle; moving the repo out of OneDrive remains the safer long-term remediation.
-
-Next recommended step:
-
-- Commit 4 - extract Welcome (`(auth)/welcome.tsx`), conditional on continuing the OneDrive pause/check ritual before editing.
-
-Signed-off-by: Codex <codex@openai.com>
-
 ### 2026-05-17 21:53 Europe/Lisbon - Codex
 
 Status: Commit 3 infrastructure is implemented. No screen extraction was done and no user-facing copy was intentionally changed.
@@ -490,5 +409,86 @@ Warnings:
 Next recommended step:
 
 - Commit 4 - extract Welcome (`(auth)/welcome.tsx`). This is the first screen that will actually consume both the i18n catalogue and the zustand stores, so it is the moment the hydration guard becomes live for user-facing runtime behavior.
+
+Signed-off-by: Codex <codex@openai.com>
+
+### 2026-05-17 22:07 Europe/Lisbon - Codex - Working tree recovery
+
+Status: recovery complete on commit `06eb964` (`Pass 1 commit 3: scaffold i18n catalogue and hydration guard`). The tracked working tree is aligned with `HEAD`; only the new recovery brief documentation was left to commit.
+
+Completed:
+
+- Pedro paused OneDrive sync before recovery.
+- Pedro confirmed editors/tools with the repo open were closed, except this Codex session.
+- Rebuilt the git index by removing `.git/index` and running `git reset --mixed HEAD`.
+- Restored tracked working-tree files from `HEAD` with `git checkout -- .`.
+- Ran `npm install` for lockfile sanity; it reported the project was already up to date.
+- Pedro resumed OneDrive sync after validation.
+- Re-ran the key integrity checks after a 30-second OneDrive resume window.
+
+Validation:
+
+- `git status --short` ran without index errors and showed only `docs/working-tree-recovery-brief.md` as untracked before this log update.
+- `git log --oneline -5` showed `06eb964` at `HEAD`.
+- `app/_layout.tsx` was 376 bytes and ended with the expected closing `</I18nextProvider>` and function braces.
+- The Commit 3 execution-log heading `2026-05-17 21:53` was present exactly once.
+- `src/i18n/locales/en` contained 12 namespace JSON files.
+- `src/i18n/locales/pt-PT` contained 12 namespace JSON files.
+- `src/i18n/locales/pt-BR` contained `.gitkeep`.
+- `src/i18n/locales/es` contained `.gitkeep`.
+- `npm run typecheck` passed.
+- `npm run i18n:check` passed in warning mode with no plain JSX text nodes found.
+- After OneDrive sync was resumed and 30 seconds elapsed, `HEAD`, `_layout.tsx`, the Commit 3 log entry, and the i18n namespace counts were still correct.
+
+Flags / Roadblocks:
+
+- Pedro chose Option B: keep the repo in OneDrive for now.
+- Before every Codex session, pause OneDrive sync and confirm `git status` is clean.
+- After every Codex session, confirm `git status` is clean, resume OneDrive sync, wait about 30 seconds, and re-check `git status`.
+- Option B is workable but brittle; moving the repo out of OneDrive remains the safer long-term remediation.
+
+Next recommended step:
+
+- Commit 4 - extract Welcome (`(auth)/welcome.tsx`), conditional on continuing the OneDrive pause/check ritual before editing.
+
+Signed-off-by: Codex <codex@openai.com>
+
+### 2026-05-18 00:16 Europe/Lisbon - Codex - Move to GitHub
+
+Status: pushed the repository to GitHub and resumed work from the new non-OneDrive clone at `C:\Users\PedroFreire\dev\smart-shoppingcart`. The GitHub remote was created manually by Pedro at `https://github.com/PedroFJ/smart-shoppingcart`; the initial pushed history landed at `6cabb08` before this docs-only log entry.
+
+Completed:
+
+- Rebuilt the index in the OneDrive copy with `git reset --mixed HEAD` without restoring the working tree.
+- Audited `.gitignore` before the first push.
+- Scanned tracked files for secret-shaped strings before the first push.
+- Confirmed `eas.json` contains build configuration only, with no secrets.
+- Added `origin` pointing to `https://github.com/PedroFJ/smart-shoppingcart`.
+- Pushed `master` to GitHub.
+- Verified this new clone is running from `C:\Users\PedroFreire\dev\smart-shoppingcart`, outside OneDrive.
+
+Validation:
+
+- Pre-push secret scan found only placeholders and environment variable references:
+  - `.env.example`
+  - `README.md`
+  - `src/lib/supabase.ts`
+- `.git` size before push was 4.61 MB, which was reasonable for this history.
+- `git push -u origin master` succeeded.
+- `git ls-remote --heads origin` showed `master` at `6cabb08`.
+- In the new clone, `git status --short` was clean before this docs-only log entry.
+- In the new clone, `git log --oneline -3` showed `6cabb08`, `06eb964`, and `398d37f`.
+- In the new clone, `origin` fetch and push both point to `https://github.com/PedroFJ/smart-shoppingcart`.
+- In the new clone, `app/_layout.tsx` was 390 bytes with Windows line endings, matching the expected full file rather than the earlier truncated 138-byte corruption.
+
+Flags / Roadblocks:
+
+- The new clone resolves the OneDrive corruption risk for future Codex work, provided Codex/Cowork stays pointed at `C:\Users\PedroFreire\dev\smart-shoppingcart`.
+- The old OneDrive copy should be archived, not deleted immediately, once the new workspace has been confirmed in Codex/Cowork.
+- `.gitignore` should be tightened in a later docs/tooling cleanup to include broader patterns such as `.env.*`, `.expo-shared/`, and `dist*/`; this was deliberately not changed before the first GitHub push because that push needed to preserve `6cabb08` exactly.
+
+Next recommended step:
+
+- Commit 4 - extract Welcome (`(auth)/welcome.tsx`) after confirming the active Codex workspace is the new non-OneDrive path.
 
 Signed-off-by: Codex <codex@openai.com>
