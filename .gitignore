@@ -1,8 +1,40 @@
+# Node / npm
 node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Expo / React Native
 .expo/
-dist/
+.expo-shared/
+*.tsbuildinfo
+
+# Build output
+dist*/
 web-build/
+build/
+
+# Native build artifacts
+*.aab
+*.apk
+*.ipa
+*.keystore
+
+# Environment
 .env
-.env.local
-*.log
+.env.*
+!.env.example
+
+# Coverage / test
 coverage/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo

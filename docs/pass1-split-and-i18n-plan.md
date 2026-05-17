@@ -362,6 +362,61 @@ Next recommended step:
 
 Signed-off-by: Codex <codex@openai.com>
 
+### 2026-05-18 00:33 Europe/Lisbon - Codex - Normalize line endings
+
+Status: Phase 1 cleanup complete and pushed as `d37fede` (`Normalize line endings to LF via .gitattributes`).
+
+Completed:
+
+- Added `.gitattributes` with LF normalization for text files and binary exemptions for media/native artifacts.
+- Ran `git add --renormalize .`.
+- Rewrote tracked text working-tree files mechanically from CRLF to LF so the checkout matched the new policy.
+- Confirmed no content changes were staged apart from `.gitattributes`.
+
+Validation:
+
+- `git diff --cached --ignore-cr-at-eol --exit-code -- . ':!.gitattributes'` reported no content diff.
+- `app/_layout.tsx` had no CRLF pairs after the rewrite and was 376 bytes.
+- `npm run typecheck` passed.
+- `npm run i18n:check` passed in warning mode with no plain JSX text nodes found.
+- `npx expo export --platform web --clear --output-dir dist-router-smoke` passed; the temporary export folder was deleted.
+
+Flags / Roadblocks:
+
+- The expected broad 65-file renormalization did not become a repository content diff; the clone already had LF content in the index. The working tree had CRLF due to Windows checkout behavior, and `.gitattributes` now prevents that drift.
+
+Next recommended step:
+
+- Phase 2 - tighten `.gitignore` patterns.
+
+Signed-off-by: Codex <codex@openai.com>
+
+### 2026-05-18 00:33 Europe/Lisbon - Codex - Tighten .gitignore
+
+Status: Phase 2 cleanup complete. The ignore rules now cover broader Node, Expo, build, native artifact, environment, OS, and editor patterns.
+
+Completed:
+
+- Replaced the minimal `.gitignore` with the expanded pattern set from `docs/commit-4-welcome-and-cleanup-brief.md`.
+- Preserved `.env.example` as intentionally trackable while ignoring `.env.*`.
+
+Validation:
+
+- Confirmed no tracked files needed to be untracked as part of this ignore change.
+- `npm run typecheck` passed.
+- `npm run i18n:check` passed in warning mode with no plain JSX text nodes found.
+- `npx expo export --platform web --clear --output-dir dist-router-smoke` passed; the temporary export folder was deleted.
+
+Flags / Roadblocks:
+
+- The new Commit 4 brief remains intentionally untracked until the Welcome extraction commit, per the brief.
+
+Next recommended step:
+
+- Phase 3 - Pass 1 commit 4: extract Welcome (`(auth)/welcome.tsx`).
+
+Signed-off-by: Codex <codex@openai.com>
+
 ### 2026-05-17 21:53 Europe/Lisbon - Codex
 
 Status: Commit 3 infrastructure is implemented. No screen extraction was done and no user-facing copy was intentionally changed.
