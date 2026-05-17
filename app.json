@@ -2,16 +2,18 @@
   "expo": {
     "name": "Smart Shoppingcart",
     "slug": "smart-shoppingcart",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "orientation": "portrait",
     "scheme": "smart-shoppingcart",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.pedrofreire.smartshoppingcart"
+      "bundleIdentifier": "com.pedrofreire.smartshoppingcart",
+      "buildNumber": "2"
     },
     "android": {
       "package": "com.pedrofreire.smartshoppingcart",
+      "versionCode": 2,
       "adaptiveIcon": {
         "backgroundColor": "#F5F7F9"
       }
@@ -21,7 +23,14 @@
     },
     "plugins": [
       "expo-secure-store",
-      "expo-sqlite"
+      "expo-sqlite",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Permitir que a Smart Shoppingcart use o microfone para pesquisa por voz.",
+          "speechRecognitionPermission": "Permitir que a Smart Shoppingcart use reconhecimento de voz para pesquisa."
+        }
+      ]
     ],
     "extra": {
       "eas": {

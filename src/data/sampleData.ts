@@ -4,7 +4,8 @@ export type SectionId =
   | "cleaning"
   | "fruit-veg"
   | "frozen"
-  | "meat-fish"
+  | "meat"
+  | "fish"
   | "dairy"
   | "pantry"
   | "drinks"
@@ -44,7 +45,8 @@ export const sections: Section[] = [
   { id: "cleaning", name: "Limpeza" },
   { id: "fruit-veg", name: "Frutas e Legumes" },
   { id: "frozen", name: "Congelados" },
-  { id: "meat-fish", name: "Carne e peixe" },
+  { id: "meat", name: "Carne" },
+  { id: "fish", name: "Peixe" },
   { id: "dairy", name: "Laticínios" },
   { id: "pantry", name: "Mercearia" },
   { id: "drinks", name: "Bebidas" },
@@ -147,10 +149,10 @@ export const starterProducts: Product[] = [
   p({ id: "bolos-secos", name: "Bolos secos", sectionId: "pantry" }),
   p({ id: "flocos", name: "Flocos", sectionId: "pantry" }),
 
-  p({ id: "bacalhau", name: "Bacalhau", sectionId: "meat-fish" }),
-  p({ id: "carne", name: "Carne", sectionId: "meat-fish" }),
-  p({ id: "peixe", name: "Peixe", sectionId: "meat-fish" }),
-  p({ id: "entrecosto-favas", name: "Entrecosto para favas", sectionId: "meat-fish", exact: true }),
+  p({ id: "bacalhau", name: "Bacalhau", sectionId: "fish" }),
+  p({ id: "carne", name: "Carne", sectionId: "meat" }),
+  p({ id: "peixe", name: "Peixe", sectionId: "fish" }),
+  p({ id: "entrecosto-favas", name: "Entrecosto para favas", sectionId: "meat", exact: true }),
 
   p({ id: "leite-pedro", name: "Leite Pedro", sectionId: "dairy", exact: true }),
   p({ id: "leite-vanda", name: "Leite Vanda", sectionId: "dairy", exact: true }),
@@ -189,7 +191,8 @@ export const defaultItinerary: SectionId[] = [
   "cleaning",
   "fruit-veg",
   "frozen",
-  "meat-fish",
+  "fish",
+  "meat",
   "dairy",
   "pantry",
   "drinks",

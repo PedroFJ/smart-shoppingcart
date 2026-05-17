@@ -5,6 +5,7 @@ import {
   ScrollView,
   StatusBar,
   StyleSheet,
+  Switch,
   TextStyle,
   Text,
   TextInput,
@@ -13,11 +14,13 @@ import {
   View,
   ViewStyle
 } from "react-native";
+import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from "expo-speech-recognition";
 import { defaultItinerary, Product, SectionId, sections, starterProducts } from "./src/data/sampleData";
 import { inferSectionRoute, PickEvent, sortByRoute } from "./src/domain/routeInference";
+import { getDeviceLocalStorage, LocalStorageLike } from "./src/lib/deviceStorage";
 import { defaultSyncSpaceId, isSupabaseConfigured, supabase } from "./src/lib/supabase";
 
-type Screen = "welcome" | "list" | "add" | "shop" | "summary";
+type Screen = "welcome" | "list" | "add" | "shop" | "settings" | "summary";
 type MainScreen = Exclude<Screen, "summary">;
 type ListStatus = "needed" | "picked" | "missing" | "skipped";
 type DepartmentFilter = SectionId | "all";
@@ -75,10 +78,11 @@ type PersistedAppState = {
   savedAt: string;
 };
 
-type LocalStorageLike = {
-  getItem: (key: string) => string | null;
-  setItem: (key: string, value: string) => void;
-  removeItem: (key: string) => void;
+type LocalUserSettings = {
+  userName: string;
+  voiceSearchEnabled: boolean;
+  defaultStoreId: string;
+  smartStartEnabled: boolean;
 };
 
 type RemoteSnapshotRow = {
@@ -89,10 +93,15 @@ type RemoteSnapshotRow = {
 };
 
 const STORAGE_KEY = "smart-shoppingcart:v1";
+const LOCAL_USER_SETTINGS_KEY = "smart-shoppingcart:user-settings:v1";
 const SYNC_CLIENT_ID_KEY = "smart-shoppingcart:sync-client-id";
 const SYNC_SPACE_ID_KEY = "smart-shoppingcart:sync-space-id";
 const CURRENT_STORAGE_VERSION = 2;
 const CART_DRAG_STEP = 86;
+const VOICE_SEARCH_LOCALE = "pt-PT";
+const APP_VERSION = "0.1.1";
+const UPDATE_CHANNEL = "staging";
+const searchStopWords = new Set(["a", "as", "o", "os", "de", "da", "das", "do", "dos", "e", "the", "of", "for"]);
 const androidStatusBarInset = Platform.OS === "android" ? (StatusBar.currentHeight ?? 24) : 0;
 const androidNavigationBarInset = Platform.OS === "android" ? 24 : 0;
 const sectionNameById = new Map(sections.map((section) => [section.id, section.name]));
@@ -139,6 +148,12 @@ const defaultStoreItineraries: StoreItineraries = supermarketProfiles.reduce<Sto
   return itineraries;
 }, {});
 const defaultStoreId = supermarketProfiles[0].id;
+const defaultLocalUserSettings: LocalUserSettings = {
+  userName: "",
+  voiceSearchEnabled: true,
+  defaultStoreId,
+  smartStartEnabled: false
+};
 
 export default function App() {
   const { height, width } = useWindowDimensions();
@@ -147,7 +162,18 @@ export default function App() {
   const remoteApplyInProgress = useRef(false);
   const remoteReady = useRef(!isSupabaseConfigured);
   const syncTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [screen, setScreen] = useState<Screen>("welcome");
+  const hasRunPersistence = useRef(false);
+  const skipNextPersistence = useRef(false);
+  const latestLocalSavedAt = useRef(initialAppState?.savedAt ?? "");
+  const [localUserSettings, setLocalUserSettings] = useState(readLocalUserSettings);
+  const [screen, setScreen] = useState<Screen>(() => {
+    if (!localUserSettings.smartStartEnabled) {
+      return "welcome";
+    }
+
+    const initialNeededItems = initialAppState?.shoppingItems?.filter((item) => item.status === "needed") ?? [];
+    return initialNeededItems.length > 0 ? "list" : "add";
+  });
   const [activeSyncSpaceId, setActiveSyncSpaceId] = useState(getInitialSyncSpaceId);
   const [syncSpaceDraft, setSyncSpaceDraft] = useState(() => getInitialSyncSpaceId());
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(isSupabaseConfigured ? "loading" : "local");
@@ -162,7 +188,9 @@ export default function App() {
   const [storeProductOrders, setStoreProductOrders] = useState<StoreProductOrders>(() => {
     return initialAppState?.storeProductOrders ?? {};
   });
-  const [selectedStoreId, setSelectedStoreId] = useState(() => initialAppState?.selectedStoreId ?? defaultStoreId);
+  const [selectedStoreId, setSelectedStoreId] = useState(() => {
+    return initialAppState?.selectedStoreId ?? localUserSettings.defaultStoreId ?? defaultStoreId;
+  });
   const [products, setProducts] = useState<Product[]>(() => initialAppState?.products ?? starterProducts);
   const [shoppingItems, setShoppingItems] = useState<ShoppingItem[]>(() => {
     return initialAppState?.shoppingItems ?? createInitialShoppingList(initialAppState?.products ?? starterProducts);
@@ -185,6 +213,10 @@ export default function App() {
     setProducts((current) => current.map(normalizeExistingProduct));
     setShoppingItems((current) => current.map(normalizeExistingShoppingItem));
   }, []);
+
+  useEffect(() => {
+    writeLocalUserSettings(localUserSettings);
+  }, [localUserSettings]);
 
   useEffect(() => {
     const syncClient = supabase;
@@ -219,6 +251,12 @@ export default function App() {
       }
 
       if (data?.state) {
+        if (initialAppState && isSavedStateNewer(initialAppState.savedAt, data.state.savedAt)) {
+          remoteReady.current = true;
+          pushRemoteAppState(createPersistedAppState());
+          return;
+        }
+
         remoteApplyInProgress.current = true;
         applyPersistedAppState(data.state);
         remoteApplyInProgress.current = false;
@@ -246,6 +284,10 @@ export default function App() {
             return;
           }
 
+          if (!isSavedStateNewer(nextRow.state.savedAt, latestLocalSavedAt.current)) {
+            return;
+          }
+
           remoteApplyInProgress.current = true;
           applyPersistedAppState(nextRow.state);
           remoteApplyInProgress.current = false;
@@ -267,8 +309,19 @@ export default function App() {
   }, [activeSyncSpaceId]);
 
   useEffect(() => {
+    if (skipNextPersistence.current) {
+      skipNextPersistence.current = false;
+      return;
+    }
+
+    if (!hasRunPersistence.current) {
+      hasRunPersistence.current = true;
+      return;
+    }
+
     const nextState = createPersistedAppState();
 
+    latestLocalSavedAt.current = nextState.savedAt;
     writePersistedAppState(nextState);
 
     if (!isSupabaseConfigured || !remoteReady.current || remoteApplyInProgress.current) {
@@ -323,7 +376,7 @@ export default function App() {
   function createPersistedAppState(): PersistedAppState {
     return {
       version: CURRENT_STORAGE_VERSION,
-      products,
+      products: mergeProductsWithShoppingItems(products, shoppingItems),
       shoppingItems,
       itinerary,
       storeItineraries,
@@ -369,6 +422,9 @@ export default function App() {
   }
 
   function applyPersistedAppState(nextState: PersistedAppState) {
+    latestLocalSavedAt.current = nextState.savedAt;
+    skipNextPersistence.current = true;
+    writePersistedAppState(nextState);
     setProducts(nextState.products.map(normalizeExistingProduct));
     setShoppingItems(nextState.shoppingItems.map(normalizeExistingShoppingItem));
     setItinerary(nextState.itinerary.length > 0 ? nextState.itinerary : defaultItinerary);
@@ -376,7 +432,7 @@ export default function App() {
     setStoreStopOrders(hydrateStoreStopOrders(nextState.storeStopOrders));
     setStoreProductOrders(hydrateStoreProductOrders(nextState.storeProductOrders));
     setSelectedStoreId(isSupermarketId(nextState.selectedStoreId) ? nextState.selectedStoreId : defaultStoreId);
-    setPickEvents(nextState.pickEvents.filter(isPickEventLike));
+    setPickEvents(nextState.pickEvents.filter(isPickEventLike).map(hydratePickEvent));
     setDepartmentFilter(isDepartmentFilter(nextState.departmentFilter) ? nextState.departmentFilter : "all");
     setListSearch(nextState.listSearch ?? "");
     setAddSearch(nextState.addSearch ?? "");
@@ -444,9 +500,10 @@ export default function App() {
       return;
     }
 
-    setProducts((current) => [...current, classifiedProduct]);
+    setProducts((current) => mergeProductsWithShoppingItems(current, [withStatus(classifiedProduct)]));
     setShoppingItems((current) => [...current, withStatus(classifiedProduct)]);
     addProductToActiveTrip(classifiedProduct.id);
+    setAddSearch("");
     setDepartmentFilter(classifiedProduct.sectionId);
     setListSearch(classifiedProduct.name);
     setScreen("list");
@@ -497,11 +554,24 @@ export default function App() {
 
     if (pickedAt) {
       setProducts((current) => {
-        return current.map((product) => {
+        const nextProducts = current.map((product) => {
           return product.id === productId
             ? { ...product, defaultQuantity: pickedQuantity, lastPickedAt: pickedAt }
             : product;
         });
+
+        if (nextProducts.some((product) => product.id === productId)) {
+          return nextProducts;
+        }
+
+        return [
+          ...nextProducts,
+          {
+            ...productFromShoppingItem(item),
+            defaultQuantity: pickedQuantity,
+            lastPickedAt: pickedAt
+          }
+        ];
       });
     }
 
@@ -540,36 +610,6 @@ export default function App() {
     setShoppingItems((current) => {
       return current.map((item) => {
         return item.id === productId ? { ...item, quantity } : item;
-      });
-    });
-  }
-
-  function moveShoppingItem(productId: string, direction: "up" | "down", visibleItemIds: string[]) {
-    setShoppingItems((current) => {
-      const neededOrder = sortShoppingItems(current.filter((item) => item.status === "needed"), defaultItinerary).map((item) => item.id);
-      const visibleIndex = visibleItemIds.indexOf(productId);
-      const targetVisibleIndex = direction === "up" ? visibleIndex - 1 : visibleIndex + 1;
-
-      if (visibleIndex < 0 || targetVisibleIndex < 0 || targetVisibleIndex >= visibleItemIds.length) {
-        return current;
-      }
-
-      const targetProductId = visibleItemIds[targetVisibleIndex];
-      const sourceOrderIndex = neededOrder.indexOf(productId);
-      const targetOrderIndex = neededOrder.indexOf(targetProductId);
-
-      if (sourceOrderIndex < 0 || targetOrderIndex < 0) {
-        return current;
-      }
-
-      const nextOrder = [...neededOrder];
-      nextOrder[sourceOrderIndex] = targetProductId;
-      nextOrder[targetOrderIndex] = productId;
-      const orderById = new Map(nextOrder.map((id, index) => [id, index]));
-
-      return current.map((item) => {
-        const customOrder = orderById.get(item.id);
-        return customOrder === undefined ? item : { ...item, customOrder };
       });
     });
   }
@@ -770,6 +810,7 @@ export default function App() {
 
   function finishShoppingTrip() {
     const tripItemIds = activeTripItemIds ?? lockedPickingIds;
+    setProducts((current) => mergeProductsWithShoppingItems(current, shoppingItems));
     setShoppingItems((current) => buildNextShoppingList(current, tripItemIds));
     setPickEvents([]);
     setLastChange(null);
@@ -778,6 +819,7 @@ export default function App() {
     setActiveTripItemIds(null);
     setDepartmentFilter("all");
     setListSearch("");
+    setAddSearch("");
     setShoppingDoneNotice(true);
     setScreen("list");
   }
@@ -810,6 +852,7 @@ export default function App() {
           total={shoppingItems.length}
           syncStatus={syncStatus}
           syncMessage={syncMessage}
+          onOpenSettings={() => setScreen("settings")}
         />
         {screen !== "summary" && !isCompactLayout && (
           <NavigationTabs
@@ -818,6 +861,7 @@ export default function App() {
             addCount={addableProductCount}
             cartCount={pickingItems.length}
             isCheckoutLocked={isCheckoutLocked}
+            showWelcome={!localUserSettings.smartStartEnabled}
             compact={false}
             onNavigate={navigateToMainScreen}
           />
@@ -825,14 +869,7 @@ export default function App() {
 
         <View style={styles.contentArea}>
         {screen === "welcome" && (
-          <WelcomeScreen
-            activeSyncSpaceId={activeSyncSpaceId}
-            isSupabaseConfigured={isSupabaseConfigured}
-            onSaveSyncSpace={saveSyncSpace}
-            onSyncSpaceDraftChange={setSyncSpaceDraft}
-            syncSpaceDraft={syncSpaceDraft}
-            syncStatus={syncStatus}
-          />
+          <WelcomeScreen />
         )}
 
         {screen === "list" && (
@@ -848,7 +885,7 @@ export default function App() {
             onToggleAlternatives={toggleAcceptsAlternatives}
             onChangeNote={updateItemNote}
             onChangeQuantity={updateItemQuantity}
-            onMoveItem={moveShoppingItem}
+            voiceSearchEnabled={localUserSettings.voiceSearchEnabled}
           />
         )}
 
@@ -864,6 +901,27 @@ export default function App() {
             onCreateProduct={createAndAddProduct}
             onUpdateProduct={updateCatalogProduct}
             onDeleteProduct={deleteCatalogProduct}
+            voiceSearchEnabled={localUserSettings.voiceSearchEnabled}
+          />
+        )}
+
+        {screen === "settings" && (
+          <SettingsScreen
+            activeSyncSpaceId={activeSyncSpaceId}
+            isSupabaseConfigured={isSupabaseConfigured}
+            localUserSettings={localUserSettings}
+            onChangeLocalUserSettings={setLocalUserSettings}
+            onSaveSyncSpace={saveSyncSpace}
+            onSyncSpaceDraftChange={setSyncSpaceDraft}
+            onSelectDefaultStore={(storeId) => {
+              setLocalUserSettings((current) => ({ ...current, defaultStoreId: storeId }));
+              setSelectedStoreId(storeId);
+            }}
+            stores={supermarketProfiles}
+            selectedDefaultStoreId={localUserSettings.defaultStoreId}
+            selectedStoreName={selectedStore.name}
+            syncSpaceDraft={syncSpaceDraft}
+            syncStatus={syncStatus}
           />
         )}
 
@@ -905,6 +963,7 @@ export default function App() {
             addCount={addableProductCount}
             cartCount={pickingItems.length}
             isCheckoutLocked={isCheckoutLocked}
+            showWelcome={!localUserSettings.smartStartEnabled}
             compact
             onNavigate={navigateToMainScreen}
           />
@@ -919,19 +978,26 @@ function Header({
   progress,
   total,
   syncStatus,
-  syncMessage
+  syncMessage,
+  onOpenSettings
 }: {
   compact: boolean;
   progress: number;
   total: number;
   syncStatus: SyncStatus;
   syncMessage: string;
+  onOpenSettings: () => void;
 }) {
   if (compact) {
     return (
       <View style={[styles.header, styles.headerCompact]}>
         <View style={styles.headerCompactRow}>
-          <Text style={[styles.title, styles.titleCompact]}>Smart Shoppingcart</Text>
+          <View style={styles.titleActionRowCompact}>
+            <Text style={[styles.title, styles.titleCompact]}>Smart Shoppingcart</Text>
+            <TouchableOpacity style={styles.titleSettingsLinkCompact} onPress={onOpenSettings}>
+              <Text style={styles.titleSettingsLinkText}>Definições</Text>
+            </TouchableOpacity>
+          </View>
           <View style={styles.headerCompactMeta}>
             <Text style={[styles.syncPill, styles.syncPillCompact, getSyncPillStyle(syncStatus)]}>{syncMessage}</Text>
             <Text style={styles.progressCompact}>{progress}/{total}</Text>
@@ -944,7 +1010,12 @@ function Header({
   return (
     <View style={styles.header}>
       <Text style={styles.kicker}>Weekend shop</Text>
-      <Text style={styles.title}>Smart Shoppingcart</Text>
+      <View style={styles.titleActionRow}>
+        <Text style={styles.title}>Smart Shoppingcart</Text>
+        <TouchableOpacity style={styles.titleSettingsLink} onPress={onOpenSettings}>
+          <Text style={styles.titleSettingsLinkText}>Definições</Text>
+        </TouchableOpacity>
+      </View>
       <View style={styles.headerMetaRow}>
         <Text style={styles.progress}>{progress} de {total} tratados</Text>
         <Text style={[styles.syncPill, getSyncPillStyle(syncStatus)]}>{syncMessage}</Text>
@@ -969,12 +1040,128 @@ function getSyncPillStyle(syncStatus: SyncStatus): TextStyle {
   return styles.syncPill_local;
 }
 
+function useVoiceSearch({
+  contextualStrings,
+  enabled,
+  onTranscript
+}: {
+  contextualStrings: string[];
+  enabled: boolean;
+  onTranscript: (transcript: string) => void;
+}) {
+  const [isListening, setIsListening] = useState(false);
+  const [isAvailable, setIsAvailable] = useState(true);
+
+  useEffect(() => {
+    if (!enabled) {
+      try {
+        ExpoSpeechRecognitionModule.stop();
+      } catch {
+        // Voice search can be unavailable on web or older builds.
+      }
+      setIsListening(false);
+      return;
+    }
+
+    try {
+      setIsAvailable(ExpoSpeechRecognitionModule.isRecognitionAvailable());
+    } catch {
+      setIsAvailable(false);
+    }
+  }, [enabled]);
+
+  useSpeechRecognitionEvent("start", () => setIsListening(true));
+  useSpeechRecognitionEvent("end", () => setIsListening(false));
+  useSpeechRecognitionEvent("result", (event) => {
+    const transcript = event.results[0]?.transcript.trim();
+
+    if (transcript) {
+      onTranscript(transcript);
+    }
+
+    if (event.isFinal && Platform.OS === "web") {
+      ExpoSpeechRecognitionModule.stop();
+    }
+  });
+  useSpeechRecognitionEvent("error", () => {
+    setIsListening(false);
+  });
+
+  async function toggle() {
+    if (isListening) {
+      ExpoSpeechRecognitionModule.stop();
+      return;
+    }
+
+    try {
+      if (!ExpoSpeechRecognitionModule.isRecognitionAvailable()) {
+        setIsAvailable(false);
+        return;
+      }
+
+      const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+
+      if (!permission.granted) {
+        setIsListening(false);
+        setIsAvailable(false);
+        return;
+      }
+
+      ExpoSpeechRecognitionModule.start({
+        lang: VOICE_SEARCH_LOCALE,
+        interimResults: true,
+        continuous: true,
+        maxAlternatives: 1,
+        contextualStrings: contextualStrings.slice(0, 80),
+        androidIntentOptions: {
+          EXTRA_LANGUAGE_MODEL: "web_search"
+        },
+        iosTaskHint: "search"
+      });
+    } catch {
+      setIsListening(false);
+      setIsAvailable(false);
+    }
+  }
+
+  return {
+    isAvailable,
+    isListening,
+    toggle
+  };
+}
+
+function VoiceSearchButton({
+  isListening,
+  onPress
+}: {
+  isListening: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity
+      style={[
+        styles.voiceSearchButton,
+        isListening && styles.voiceSearchButtonActive
+      ]}
+      onPress={onPress}
+    >
+      <View style={styles.microphoneIcon}>
+        <View style={[styles.microphoneHead, isListening && styles.microphoneIconActive]} />
+        <View style={[styles.microphoneStem, isListening && styles.microphoneIconActive]} />
+        <View style={[styles.microphoneBase, isListening && styles.microphoneIconActive]} />
+      </View>
+    </TouchableOpacity>
+  );
+}
+
 function NavigationTabs({
   activeScreen,
   listCount,
   addCount,
   cartCount,
   isCheckoutLocked,
+  showWelcome,
   compact,
   onNavigate
 }: {
@@ -983,6 +1170,7 @@ function NavigationTabs({
   addCount: number;
   cartCount: number;
   isCheckoutLocked: boolean;
+  showWelcome: boolean;
   compact: boolean;
   onNavigate: (screen: MainScreen) => void;
 }) {
@@ -990,9 +1178,11 @@ function NavigationTabs({
     { screen: "welcome", label: "Início", count: 0 },
     { screen: "list", label: "Lista", count: listCount },
     { screen: "add", label: "Adicionar", count: addCount },
-    { screen: "shop", label: "Carrinho", count: cartCount, detail: isCheckoutLocked ? "A pagar" : undefined }
+    { screen: "shop", label: "Carrinho", count: cartCount, detail: isCheckoutLocked ? "A pagar" : undefined },
+    { screen: "settings", label: "Definições", count: 0 }
   ];
-  const tabs = allTabs;
+  const visibleTabs = allTabs.filter((tab) => tab.screen !== "settings");
+  const tabs = showWelcome ? visibleTabs : visibleTabs.filter((tab) => tab.screen !== "welcome");
 
   return (
     <ScrollView
@@ -1014,7 +1204,7 @@ function NavigationTabs({
               {tab.label}
             </Text>
             <Text style={[styles.navTabMeta, compact && styles.navTabMetaCompact, isActive && styles.navTabMetaActive]}>
-              {tab.screen === "welcome" ? "Ajuda" : tab.detail ? `${tab.count} - ${tab.detail}` : String(tab.count)}
+              {tab.screen === "welcome" ? "Ajuda" : tab.screen === "settings" ? "Conta" : tab.detail ? `${tab.count} - ${tab.detail}` : String(tab.count)}
             </Text>
           </TouchableOpacity>
         );
@@ -1023,21 +1213,7 @@ function NavigationTabs({
   );
 }
 
-function WelcomeScreen({
-  activeSyncSpaceId,
-  isSupabaseConfigured,
-  onSaveSyncSpace,
-  onSyncSpaceDraftChange,
-  syncSpaceDraft,
-  syncStatus
-}: {
-  activeSyncSpaceId: string;
-  isSupabaseConfigured: boolean;
-  onSaveSyncSpace: () => void;
-  onSyncSpaceDraftChange: (value: string) => void;
-  syncSpaceDraft: string;
-  syncStatus: SyncStatus;
-}) {
+function WelcomeScreen() {
   return (
     <ScrollView contentContainerStyle={styles.welcomeContent}>
       <View style={styles.welcomePanel}>
@@ -1070,12 +1246,85 @@ function WelcomeScreen({
           </View>
         </View>
       </View>
+    </ScrollView>
+  );
+}
 
-      <View style={styles.syncPanel}>
+function SettingsScreen({
+  activeSyncSpaceId,
+  isSupabaseConfigured,
+  localUserSettings,
+  onChangeLocalUserSettings,
+  onSaveSyncSpace,
+  onSyncSpaceDraftChange,
+  onSelectDefaultStore,
+  stores,
+  selectedDefaultStoreId,
+  selectedStoreName,
+  syncSpaceDraft,
+  syncStatus
+}: {
+  activeSyncSpaceId: string;
+  isSupabaseConfigured: boolean;
+  localUserSettings: LocalUserSettings;
+  onChangeLocalUserSettings: (settings: LocalUserSettings) => void;
+  onSaveSyncSpace: () => void;
+  onSyncSpaceDraftChange: (value: string) => void;
+  onSelectDefaultStore: (storeId: string) => void;
+  stores: SupermarketProfile[];
+  selectedDefaultStoreId: string;
+  selectedStoreName: string;
+  syncSpaceDraft: string;
+  syncStatus: SyncStatus;
+}) {
+  function updateLocalSettings(patch: Partial<LocalUserSettings>) {
+    onChangeLocalUserSettings({ ...localUserSettings, ...patch });
+  }
+
+  return (
+    <ScrollView contentContainerStyle={styles.settingsContent}>
+      <View style={styles.settingsPanel}>
+        <Text style={styles.settingsTitle}>Arranque</Text>
+        <View style={styles.settingsRow}>
+          <View style={styles.settingsRowText}>
+            <Text style={styles.settingsLabel}>Saltar Início</Text>
+            <Text style={styles.settingsText}>Quando ligado, abre em Lista se houver produtos; se a Lista estiver vazia, abre em Adicionar.</Text>
+          </View>
+          <Switch
+            value={localUserSettings.smartStartEnabled}
+            onValueChange={(smartStartEnabled) => updateLocalSettings({ smartStartEnabled })}
+            trackColor={{ false: "#C8D0DB", true: "#9AD4D9" }}
+            thumbColor={localUserSettings.smartStartEnabled ? "#12616F" : "#F7F9FC"}
+          />
+        </View>
+      </View>
+
+      <View style={styles.settingsPanel}>
+        <Text style={styles.settingsTitle}>Utilizador</Text>
+        <Text style={styles.settingsText}>Estas preferências ficam neste telemóvel.</Text>
+        <TextInput
+          style={styles.settingsInput}
+          value={localUserSettings.userName}
+          onChangeText={(userName) => updateLocalSettings({ userName })}
+          placeholder="Nome"
+        />
+      </View>
+
+      <View style={styles.settingsPanel}>
+        <Text style={styles.settingsTitle}>Conta e palavra-passe</Text>
+        <Text style={styles.settingsText}>
+          A app ainda não tem login de utilizador. Para gerir palavras-passe com segurança, o próximo passo é ligar autenticação, por exemplo Supabase Auth, e depois mostrar aqui alterar palavra-passe, terminar sessão e recuperação de conta.
+        </Text>
+        <View style={styles.settingsDisabledAction}>
+          <Text style={styles.settingsDisabledActionText}>Gestão de password indisponível</Text>
+        </View>
+      </View>
+
+      <View style={styles.settingsPanel}>
+        <Text style={styles.settingsTitle}>Partilha familiar</Text>
         <View style={styles.syncPanelHeader}>
           <View style={styles.syncPanelText}>
-            <Text style={styles.welcomeStepTitle}>Partilha familiar</Text>
-            <Text style={styles.welcomeText}>
+            <Text style={styles.settingsText}>
               {isSupabaseConfigured
                 ? `A usar o código ${activeSyncSpaceId}. Todos os telemóveis com este código partilham a mesma lista.`
                 : "Configure o Supabase para ativar a partilha entre telemóveis. O código fica preparado para quando ligar o sync."}
@@ -1100,6 +1349,49 @@ function WelcomeScreen({
         </View>
       </View>
 
+      <View style={styles.settingsPanel}>
+        <Text style={styles.settingsTitle}>Pesquisa</Text>
+        <View style={styles.settingsRow}>
+          <View style={styles.settingsRowText}>
+            <Text style={styles.settingsLabel}>Pesquisa por voz</Text>
+            <Text style={styles.settingsText}>Mostra o microfone em Lista e Adicionar e usa PT-pt.</Text>
+          </View>
+          <Switch
+            value={localUserSettings.voiceSearchEnabled}
+            onValueChange={(voiceSearchEnabled) => updateLocalSettings({ voiceSearchEnabled })}
+            trackColor={{ false: "#C8D0DB", true: "#9AD4D9" }}
+            thumbColor={localUserSettings.voiceSearchEnabled ? "#12616F" : "#F7F9FC"}
+          />
+        </View>
+      </View>
+
+      <View style={styles.settingsPanel}>
+        <Text style={styles.settingsTitle}>Loja</Text>
+        <Text style={styles.settingsText}>Loja ativa: {selectedStoreName}. Escolha a loja predefinida deste telemóvel.</Text>
+        <View style={styles.defaultStoreGrid}>
+          {stores.map((store) => {
+            const isSelected = store.id === selectedDefaultStoreId;
+
+            return (
+              <TouchableOpacity
+                key={store.id}
+                style={[styles.defaultStoreButton, isSelected && styles.defaultStoreButtonActive]}
+                onPress={() => onSelectDefaultStore(store.id)}
+              >
+                <Text style={[styles.defaultStoreButtonText, isSelected && styles.defaultStoreButtonTextActive]}>{store.name}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+
+      <View style={styles.settingsPanel}>
+        <Text style={styles.settingsTitle}>Sobre esta app</Text>
+        <Text style={styles.settingsText}>
+          Smart Shoppingcart ajuda a preparar a lista familiar, adicionar produtos, organizar o carrinho pela ordem da loja e aprender percursos de supermercado.
+        </Text>
+        <Text style={styles.settingsMeta}>Versão {APP_VERSION} · Canal {UPDATE_CHANNEL}</Text>
+      </View>
     </ScrollView>
   );
 }
@@ -1116,7 +1408,7 @@ function ListScreen({
   onToggleAlternatives,
   onChangeNote,
   onChangeQuantity,
-  onMoveItem
+  voiceSearchEnabled
 }: {
   items: ShoppingItem[];
   departmentFilter: DepartmentFilter;
@@ -1129,7 +1421,7 @@ function ListScreen({
   onToggleAlternatives: (productId: string) => void;
   onChangeNote: (productId: string, note: string) => void;
   onChangeQuantity: (productId: string, quantity: string) => void;
-  onMoveItem: (productId: string, direction: "up" | "down", visibleItemIds: string[]) => void;
+  voiceSearchEnabled: boolean;
 }) {
   const availableDepartments = sections.filter((section) => {
     return items.some((item) => item.sectionId === section.id);
@@ -1140,8 +1432,13 @@ function ListScreen({
   const departmentItems = effectiveDepartmentFilter === "all"
     ? items
     : items.filter((item) => item.sectionId === effectiveDepartmentFilter);
-  const visibleItems = departmentItems.filter((item) => matchesSearch(item, searchText));
+  const visibleItems = filterBySearch(departmentItems, searchText);
   const isListEmpty = items.length === 0;
+  const listVoiceSearch = useVoiceSearch({
+    contextualStrings: items.map((item) => item.name),
+    enabled: voiceSearchEnabled,
+    onTranscript: onChangeSearchText
+  });
 
   return (
     <View style={styles.screen}>
@@ -1193,10 +1490,11 @@ function ListScreen({
           onChangeText={onChangeSearchText}
           placeholder="Procurar na lista"
         />
-        {searchText.length > 0 && (
-          <TouchableOpacity style={styles.clearSearchButton} onPress={() => onChangeSearchText("")}>
-            <Text style={styles.clearSearchText}>Limpar</Text>
-          </TouchableOpacity>
+        {voiceSearchEnabled && listVoiceSearch.isAvailable && (
+          <VoiceSearchButton
+            isListening={listVoiceSearch.isListening}
+            onPress={listVoiceSearch.toggle}
+          />
         )}
       </View>
 
@@ -1220,7 +1518,7 @@ function ListScreen({
             </TouchableOpacity>
           </View>
         )}
-        {visibleItems.map((item, index) => (
+        {visibleItems.map((item) => (
           <View key={item.id} style={[styles.itemCard, getSectionCardStyle(item.sectionId)]}>
             <TouchableOpacity style={styles.itemColumn} onPress={() => onToggleAlternatives(item.id)}>
               <View>
@@ -1249,31 +1547,16 @@ function ListScreen({
             <View style={styles.noteColumn}>
               <View style={styles.noteHeader}>
                 <Text style={styles.fieldLabel}>Nota</Text>
-                <View style={styles.listCardActions}>
-                  <TouchableOpacity
-                    disabled={index === 0}
-                    style={[styles.sortButton, index === 0 && styles.sortButtonDisabled]}
-                    onPress={() => onMoveItem(item.id, "up", visibleItems.map((visibleItem) => visibleItem.id))}
-                  >
-                    <Text style={[styles.sortButtonText, index === 0 && styles.sortButtonTextDisabled]}>↑</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    disabled={index === visibleItems.length - 1}
-                    style={[styles.sortButton, index === visibleItems.length - 1 && styles.sortButtonDisabled]}
-                    onPress={() => onMoveItem(item.id, "down", visibleItems.map((visibleItem) => visibleItem.id))}
-                  >
-                    <Text style={[styles.sortButtonText, index === visibleItems.length - 1 && styles.sortButtonTextDisabled]}>↓</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.inlineSkipButton} onPress={() => onRemove(item.id)}>
-                    <Text style={styles.rowAction}>Adiar</Text>
-                  </TouchableOpacity>
-                </View>
+                <TouchableOpacity style={styles.listPostponeAction} onPress={() => onRemove(item.id)}>
+                  <Text style={styles.rowAction}>Adiar</Text>
+                </TouchableOpacity>
               </View>
               <TextInput
                 style={styles.noteInput}
                 value={item.note ?? ""}
                 onChangeText={(note) => onChangeNote(item.id, note)}
                 placeholder="Nota"
+                placeholderTextColor="#596579"
                 multiline
               />
             </View>
@@ -1294,7 +1577,8 @@ function AddScreen({
   onAdd,
   onCreateProduct,
   onUpdateProduct,
-  onDeleteProduct
+  onDeleteProduct,
+  voiceSearchEnabled
 }: {
   products: Product[];
   listProductIds: Set<string>;
@@ -1306,6 +1590,7 @@ function AddScreen({
   onCreateProduct: (input: NewProductInput) => void;
   onUpdateProduct: (product: Product) => void;
   onDeleteProduct: (productId: string) => void;
+  voiceSearchEnabled: boolean;
 }) {
   const [newProductName, setNewProductName] = useState("");
   const [newProductQuantity, setNewProductQuantity] = useState("1 un");
@@ -1322,7 +1607,12 @@ function AddScreen({
   const departmentProducts = departmentFilter === "all"
     ? sortedAddableProducts
     : sortedAddableProducts.filter((product) => product.sectionId === departmentFilter);
-  const visibleProducts = departmentProducts.filter((product) => matchesSearch(product, searchText));
+  const visibleProducts = filterBySearch(departmentProducts, searchText);
+  const addVoiceSearch = useVoiceSearch({
+    contextualStrings: products.map((product) => product.name),
+    enabled: voiceSearchEnabled,
+    onTranscript: onChangeSearchText
+  });
 
   function handleCreateProduct() {
     onCreateProduct({
@@ -1411,10 +1701,11 @@ function AddScreen({
           onChangeText={onChangeSearchText}
           placeholder="Procurar para adicionar"
         />
-        {searchText.length > 0 && (
-          <TouchableOpacity style={styles.clearSearchButton} onPress={() => onChangeSearchText("")}>
-            <Text style={styles.clearSearchText}>Limpar</Text>
-          </TouchableOpacity>
+        {voiceSearchEnabled && addVoiceSearch.isAvailable && (
+          <VoiceSearchButton
+            isListening={addVoiceSearch.isListening}
+            onPress={addVoiceSearch.toggle}
+          />
         )}
       </View>
 
@@ -1611,16 +1902,24 @@ function ShopScreen({
   const [dragOffsetY, setDragOffsetY] = useState(0);
   const [isRouteEditorOpen, setIsRouteEditorOpen] = useState(false);
   const dragStartPageY = useRef(0);
+  const dragVisibleItemIdsRef = useRef(visibleItemIds);
   const routeEditorItems = getRouteEditorItems(selectedStoreId, storeRoute, storeStopOrder);
   const dragSourceIndex = draggingProductId ? visibleItemIds.indexOf(draggingProductId) : -1;
   const dragTargetIndex = dragSourceIndex >= 0
     ? clampIndex(dragSourceIndex + Math.round(dragOffsetY / CART_DRAG_STEP), 0, items.length - 1)
     : -1;
 
+  useEffect(() => {
+    if (draggingProductId === null) {
+      dragVisibleItemIdsRef.current = visibleItemIds;
+    }
+  }, [draggingProductId, visibleItemIds]);
+
   function finishDragging(productId: string, offsetY: number) {
-    const sourceIndex = visibleItemIds.indexOf(productId);
+    const dragVisibleItemIds = dragVisibleItemIdsRef.current;
+    const sourceIndex = dragVisibleItemIds.indexOf(productId);
     const targetIndex = sourceIndex >= 0
-      ? clampIndex(sourceIndex + Math.round(offsetY / CART_DRAG_STEP), 0, visibleItemIds.length - 1)
+      ? clampIndex(sourceIndex + Math.round(offsetY / CART_DRAG_STEP), 0, dragVisibleItemIds.length - 1)
       : -1;
 
     setDraggingProductId(null);
@@ -1628,8 +1927,12 @@ function ShopScreen({
     dragStartPageY.current = 0;
 
     if (targetIndex >= 0 && targetIndex !== sourceIndex) {
-      onReorderItem(productId, targetIndex, visibleItemIds);
+      onReorderItem(productId, targetIndex, dragVisibleItemIds);
     }
+  }
+
+  function updateDragPosition(productId: string, pageY: number) {
+    setDragOffsetY(pageY - dragStartPageY.current);
   }
 
   const storeSelector = (
@@ -1702,15 +2005,15 @@ function ShopScreen({
       <View style={styles.screen}>
         {storeSelector}
         <View style={styles.cartTopActions}>
-          <TouchableOpacity style={styles.checkoutButtonCompact} onPress={onLockCheckout}>
-            <Text style={styles.checkoutButtonText}>A pagar!</Text>
-          </TouchableOpacity>
           <TouchableOpacity
             disabled={!canUndo}
             style={[styles.undoButtonCompact, !canUndo && styles.smallActionDisabled]}
             onPress={onUndo}
           >
             <Text style={[styles.undoButtonText, !canUndo && styles.smallActionTextDisabled]}>Desfazer última ação</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.checkoutButtonCompact} onPress={onLockCheckout}>
+            <Text style={styles.checkoutButtonText}>A pagar!</Text>
           </TouchableOpacity>
         </View>
         <Text style={styles.title}>Compras terminadas</Text>
@@ -1728,15 +2031,15 @@ function ShopScreen({
       {storeSelector}
 
       <View style={styles.cartTopActions}>
-        <TouchableOpacity style={styles.checkoutButtonCompact} onPress={onLockCheckout}>
-          <Text style={styles.checkoutButtonText}>A pagar!</Text>
-        </TouchableOpacity>
         <TouchableOpacity
           disabled={!canUndo}
           style={[styles.undoButtonCompact, !canUndo && styles.smallActionDisabled]}
           onPress={onUndo}
         >
           <Text style={[styles.undoButtonText, !canUndo && styles.smallActionTextDisabled]}>Desfazer última ação</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.checkoutButtonCompact} onPress={onLockCheckout}>
+          <Text style={styles.checkoutButtonText}>A pagar!</Text>
         </TouchableOpacity>
       </View>
 
@@ -1745,6 +2048,7 @@ function ShopScreen({
       <ScrollView
         style={styles.cartListScroller}
         contentContainerStyle={styles.pickingList}
+        scrollEnabled={draggingProductId === null}
       >
         {items.map((item, index) => (
           <View
@@ -1765,6 +2069,7 @@ function ShopScreen({
               ]}
               onStartShouldSetResponder={() => true}
               onMoveShouldSetResponder={() => true}
+              onResponderTerminationRequest={() => false}
               onResponderGrant={(event) => {
                 setHoveredDragProductId(item.id);
                 setDraggingProductId(item.id);
@@ -1772,7 +2077,7 @@ function ShopScreen({
                 dragStartPageY.current = event.nativeEvent.pageY;
               }}
               onResponderMove={(event) => {
-                setDragOffsetY(event.nativeEvent.pageY - dragStartPageY.current);
+                updateDragPosition(item.id, event.nativeEvent.pageY);
               }}
               onResponderRelease={(event) => {
                 finishDragging(item.id, event.nativeEvent.pageY - dragStartPageY.current);
@@ -2023,7 +2328,11 @@ function getSupercorRouteStopId(product: Product): string {
     return "talho";
   }
 
-  if (product.sectionId === "meat-fish") {
+  if (product.sectionId === "fish") {
+    return "peixaria";
+  }
+
+  if (product.sectionId === "meat") {
     return "carne-refrigerada";
   }
 
@@ -2161,15 +2470,14 @@ function readPersistedAppState(): PersistedAppState | null {
 
     const isLegacyListState = parsedState.version === 1;
 
-    const products = Array.isArray(parsedState.products)
+    const parsedProducts = Array.isArray(parsedState.products)
       ? parsedState.products.filter(isProductLike).map(hydrateProduct)
       : starterProducts;
     const shoppingItems = Array.isArray(parsedState.shoppingItems)
       ? parsedState.shoppingItems.filter(isShoppingItemLike).map(hydrateShoppingItem)
-      : createInitialShoppingList(products);
-    const itinerary = Array.isArray(parsedState.itinerary)
-      ? parsedState.itinerary.filter(isSectionId)
-      : defaultItinerary;
+      : createInitialShoppingList(parsedProducts);
+    const products = mergeProductsWithShoppingItems(parsedProducts, shoppingItems);
+    const itinerary = normalizeSectionRoute(parsedState.itinerary);
     const selectedStoreId = isSupermarketId(parsedState.selectedStoreId)
       ? parsedState.selectedStoreId
       : defaultStoreId;
@@ -2177,7 +2485,7 @@ function readPersistedAppState(): PersistedAppState | null {
     const storeStopOrders = hydrateStoreStopOrders(parsedState.storeStopOrders);
     const storeProductOrders = hydrateStoreProductOrders(parsedState.storeProductOrders);
     const pickEvents = Array.isArray(parsedState.pickEvents)
-      ? parsedState.pickEvents.filter(isPickEventLike)
+      ? parsedState.pickEvents.filter(isPickEventLike).map(hydratePickEvent)
       : [];
     const departmentFilter = isDepartmentFilter(parsedState.departmentFilter)
       ? parsedState.departmentFilter
@@ -2210,7 +2518,7 @@ function readPersistedAppState(): PersistedAppState | null {
       pickEvents: shouldResetTripState ? [] : pickEvents,
       departmentFilter,
       listSearch: typeof parsedState.listSearch === "string" ? parsedState.listSearch : "",
-      addSearch: typeof parsedState.addSearch === "string" ? parsedState.addSearch : "",
+      addSearch: "",
       isCheckoutLocked: false,
       lockedPickingIds: [],
       activeTripItemIds: shouldResetTripState ? [] : activeTripItemIds.length > 0 ? activeTripItemIds : lockedPickingIds,
@@ -2239,12 +2547,92 @@ function writePersistedAppState(state: PersistedAppState): void {
   }
 }
 
-function getLocalStorage(): LocalStorageLike | null {
-  if (typeof globalThis === "undefined" || !("localStorage" in globalThis)) {
+function isSavedStateNewer(candidateSavedAt?: string, baselineSavedAt?: string): boolean {
+  const candidateTime = parseSavedAt(candidateSavedAt);
+  const baselineTime = parseSavedAt(baselineSavedAt);
+
+  if (candidateTime === null) {
+    return false;
+  }
+
+  if (baselineTime === null) {
+    return true;
+  }
+
+  return candidateTime > baselineTime;
+}
+
+function parseSavedAt(savedAt?: string): number | null {
+  if (!savedAt) {
     return null;
   }
 
-  return globalThis.localStorage as LocalStorageLike;
+  const time = new Date(savedAt).getTime();
+  return Number.isNaN(time) ? null : time;
+}
+
+function readLocalUserSettings(): LocalUserSettings {
+  const storage = getLocalStorage();
+
+  if (!storage) {
+    return defaultLocalUserSettings;
+  }
+
+  try {
+    const rawSettings = storage.getItem(LOCAL_USER_SETTINGS_KEY);
+
+    if (!rawSettings) {
+      return defaultLocalUserSettings;
+    }
+
+    const parsedSettings = JSON.parse(rawSettings) as Partial<LocalUserSettings>;
+
+    return {
+      userName: typeof parsedSettings.userName === "string" ? parsedSettings.userName : "",
+      voiceSearchEnabled: typeof parsedSettings.voiceSearchEnabled === "boolean"
+        ? parsedSettings.voiceSearchEnabled
+        : defaultLocalUserSettings.voiceSearchEnabled,
+      defaultStoreId: isSupermarketId(parsedSettings.defaultStoreId)
+        ? parsedSettings.defaultStoreId
+        : defaultLocalUserSettings.defaultStoreId,
+      smartStartEnabled: typeof parsedSettings.smartStartEnabled === "boolean"
+        ? parsedSettings.smartStartEnabled
+        : defaultLocalUserSettings.smartStartEnabled
+    };
+  } catch {
+    return defaultLocalUserSettings;
+  }
+}
+
+function writeLocalUserSettings(settings: LocalUserSettings): void {
+  const storage = getLocalStorage();
+
+  if (!storage) {
+    return;
+  }
+
+  try {
+    storage.setItem(LOCAL_USER_SETTINGS_KEY, JSON.stringify(settings));
+  } catch (error) {
+    console.warn("Could not save user settings.", error);
+  }
+}
+
+function getLocalStorage(): LocalStorageLike | null {
+  const browserStorage = typeof globalThis !== "undefined" && "localStorage" in globalThis
+    ? globalThis.localStorage
+    : null;
+
+  if (
+    browserStorage &&
+    typeof browserStorage.getItem === "function" &&
+    typeof browserStorage.setItem === "function" &&
+    typeof browserStorage.removeItem === "function"
+  ) {
+    return browserStorage as LocalStorageLike;
+  }
+
+  return getDeviceLocalStorage();
 }
 
 function getOrCreateSyncClientId(): string {
@@ -2285,6 +2673,7 @@ function normalizeSyncSpaceId(value: string): string {
 function hydrateProduct(product: Product): Product {
   return {
     ...product,
+    sectionId: normalizeProductSectionId(product),
     defaultQuantity: product.defaultQuantity || "1 un",
     defaultAcceptsAlternatives: product.defaultAcceptsAlternatives ?? true
   };
@@ -2299,6 +2688,89 @@ function hydrateShoppingItem(item: ShoppingItem): ShoppingItem {
   };
 }
 
+function mergeProductsWithShoppingItems(products: Product[], items: ShoppingItem[]): Product[] {
+  const productById = new Map(products.map((product) => [product.id, product]));
+
+  items.forEach((item) => {
+    if (!productById.has(item.id)) {
+      productById.set(item.id, productFromShoppingItem(item));
+    }
+  });
+
+  return Array.from(productById.values());
+}
+
+function productFromShoppingItem(item: ShoppingItem): Product {
+  return {
+    id: item.id,
+    name: item.name,
+    brand: item.brand,
+    note: item.note,
+    lastPickedAt: item.lastPickedAt,
+    sectionId: item.sectionId,
+    defaultQuantity: normalizeQuantityText(item.quantity || item.defaultQuantity || "1 un"),
+    defaultAcceptsAlternatives: item.acceptsAlternatives
+  };
+}
+
+function hydratePickEvent(pickEvent: PickEvent<SectionId>): PickEvent<SectionId> {
+  return {
+    ...pickEvent,
+    sectionId: normalizeSectionId(pickEvent.sectionId) ?? "meat"
+  };
+}
+
+function normalizeProductSectionId(product: Product): SectionId {
+  const normalizedSectionId = normalizeSectionId(product.sectionId);
+
+  if (normalizedSectionId) {
+    return normalizedSectionId;
+  }
+
+  const searchable = normalizeForMatching(`${product.name} ${product.brand ?? ""} ${product.note ?? ""}`);
+
+  if (includesAny(searchable, ["bacalhau", "peixe"])) {
+    return "fish";
+  }
+
+  return "meat";
+}
+
+function normalizeSectionId(value: unknown): SectionId | null {
+  if (isSectionId(value)) {
+    return value;
+  }
+
+  if (value === "meat-fish") {
+    return "meat";
+  }
+
+  return null;
+}
+
+function normalizeSectionRoute(route: unknown): SectionId[] {
+  if (!Array.isArray(route)) {
+    return [];
+  }
+
+  const normalizedRoute: SectionId[] = [];
+
+  route.forEach((sectionId) => {
+    if (sectionId === "meat-fish") {
+      normalizedRoute.push("fish", "meat");
+      return;
+    }
+
+    const normalizedSectionId = normalizeSectionId(sectionId);
+
+    if (normalizedSectionId) {
+      normalizedRoute.push(normalizedSectionId);
+    }
+  });
+
+  return normalizedRoute.filter((sectionId, index) => normalizedRoute.indexOf(sectionId) === index);
+}
+
 function isProductLike(value: unknown): value is Product {
   if (!value || typeof value !== "object") {
     return false;
@@ -2308,7 +2780,7 @@ function isProductLike(value: unknown): value is Product {
 
   return typeof product.id === "string"
     && typeof product.name === "string"
-    && isSectionId(product.sectionId);
+    && (isSectionId(product.sectionId) || product.sectionId === "meat-fish");
 }
 
 function isShoppingItemLike(value: unknown): value is ShoppingItem {
@@ -2329,7 +2801,7 @@ function isPickEventLike(value: unknown): value is PickEvent<SectionId> {
   const pickEvent = value as PickEvent<SectionId>;
 
   return typeof pickEvent.productId === "string"
-    && isSectionId(pickEvent.sectionId)
+    && (isSectionId(pickEvent.sectionId) || pickEvent.sectionId === "meat-fish")
     && typeof pickEvent.pickedAt === "number"
     && ["picked", "missing", "skipped"].includes(pickEvent.action);
 }
@@ -2355,7 +2827,7 @@ function hydrateStoreItineraries(value: unknown, legacyItinerary: SectionId[]): 
     const route = (value as Record<string, unknown>)[store.id];
 
     if (Array.isArray(route)) {
-      const sectionRoute = route.filter(isSectionId);
+      const sectionRoute = normalizeSectionRoute(route);
       nextItineraries[store.id] = sectionRoute.length > 0 ? completeSectionRoute(sectionRoute) : defaultItinerary;
     }
   }
@@ -2551,13 +3023,31 @@ function formatLastPickedShort(lastPickedAt?: string): string {
   return date.toLocaleDateString("pt-PT");
 }
 
-function matchesSearch(product: Product | ShoppingItem, searchText: string): boolean {
-  const normalizedSearch = normalizeForMatching(searchText);
+function filterBySearch<T extends Product | ShoppingItem>(items: T[], searchText: string): T[] {
+  const searchQuery = parseSearchQuery(searchText);
 
-  if (!normalizedSearch) {
-    return true;
+  if (searchQuery.groups.length === 0) {
+    return items;
   }
 
+  if (searchQuery.hasExplicitOperator) {
+    return items.filter((item) => matchesSearchGroups(item, searchQuery.groups));
+  }
+
+  const andMatches = items.filter((item) => {
+    return matchesSearchGroups(item, [searchQuery.implicitTerms]);
+  });
+
+  if (andMatches.length > 0) {
+    return andMatches;
+  }
+
+  return items.filter((item) => {
+    return matchesSearchGroups(item, searchQuery.implicitTerms.map((term) => [term]));
+  });
+}
+
+function matchesSearchGroups(product: Product | ShoppingItem, searchGroups: string[][]): boolean {
   const searchableText = [
     product.name,
     product.brand,
@@ -2568,7 +3058,64 @@ function matchesSearch(product: Product | ShoppingItem, searchText: string): boo
     .filter(Boolean)
     .join(" ");
 
-  return normalizeForMatching(searchableText).includes(normalizedSearch);
+  const normalizedSearchableText = normalizeForMatching(searchableText);
+  return searchGroups.some((group) => {
+    return group.every((term) => normalizedSearchableText.includes(term));
+  });
+}
+
+function parseSearchQuery(searchText: string): { groups: string[][]; hasExplicitOperator: boolean; implicitTerms: string[] } {
+  const tokens = normalizeForMatching(searchText)
+    .split(" ")
+    .map((term) => term.trim())
+    .filter((term) => Boolean(term) && !searchStopWords.has(term));
+  const groups: string[][] = [];
+  let currentGroup: string[] = [];
+  let pendingOperator: "and" | "or" = "or";
+  let hasExplicitOperator = false;
+  const implicitTerms: string[] = [];
+
+  tokens.forEach((token) => {
+    if (isSearchAndOperator(token)) {
+      pendingOperator = "and";
+      hasExplicitOperator = true;
+      return;
+    }
+
+    if (isSearchOrOperator(token)) {
+      pendingOperator = "or";
+      hasExplicitOperator = true;
+      return;
+    }
+
+    implicitTerms.push(token);
+
+    if (pendingOperator === "and" && currentGroup.length > 0) {
+      currentGroup.push(token);
+    } else {
+      if (currentGroup.length > 0) {
+        groups.push(currentGroup);
+      }
+
+      currentGroup = [token];
+    }
+
+    pendingOperator = "or";
+  });
+
+  if (currentGroup.length > 0) {
+    groups.push(currentGroup);
+  }
+
+  return { groups, hasExplicitOperator, implicitTerms };
+}
+
+function isSearchAndOperator(token: string): boolean {
+  return token === "and" || token === "e";
+}
+
+function isSearchOrOperator(token: string): boolean {
+  return token === "or" || token === "ou";
 }
 
 function classifyNewProduct(input: NewProductInput, products: Product[]): Product | null {
@@ -2674,8 +3221,12 @@ function detectSectionId(value: string, note: string | undefined, fallbackSectio
       keywords: ["congelado", "gelo", "grelos", "jardineira", "noisettes", "pizza", "pure"]
     },
     {
-      sectionId: "meat-fish",
-      keywords: ["bacalhau", "carne", "entrecosto", "peixe"]
+      sectionId: "fish",
+      keywords: ["bacalhau", "peixe"]
+    },
+    {
+      sectionId: "meat",
+      keywords: ["carne", "entrecosto"]
     },
     {
       sectionId: "dairy",
@@ -2867,9 +3418,14 @@ const sectionCardStyles = StyleSheet.create<Record<SectionId, ViewStyle>>({
     borderColor: "#368ABF",
     borderLeftWidth: 6
   },
-  "meat-fish": {
+  meat: {
     backgroundColor: "#FFF0F0",
     borderColor: "#C35C58",
+    borderLeftWidth: 6
+  },
+  fish: {
+    backgroundColor: "#EFF8FF",
+    borderColor: "#2E7FA3",
     borderLeftWidth: 6
   },
   dairy: {
@@ -2929,6 +3485,18 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     gap: 6
   },
+  titleActionRow: {
+    alignItems: "baseline",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10
+  },
+  titleActionRowCompact: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexShrink: 1,
+    gap: 6
+  },
   kicker: {
     color: "#596579",
     fontSize: 14,
@@ -2946,6 +3514,22 @@ const styles = StyleSheet.create({
     fontSize: 20,
     lineHeight: 24,
     marginTop: 0
+  },
+  titleSettingsLink: {
+    minHeight: 34,
+    justifyContent: "center",
+    paddingHorizontal: 2
+  },
+  titleSettingsLinkCompact: {
+    minHeight: 30,
+    justifyContent: "center",
+    paddingHorizontal: 2
+  },
+  titleSettingsLinkText: {
+    color: "#12616F",
+    fontSize: 13,
+    fontWeight: "900",
+    textDecorationLine: "underline"
   },
   progress: {
     color: "#4B5565",
@@ -3140,6 +3724,97 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: 12,
     padding: 12
+  },
+  settingsContent: {
+    gap: 12,
+    paddingBottom: 24
+  },
+  settingsPanel: {
+    backgroundColor: "#FFFFFF",
+    borderColor: "#D8DEE8",
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 10,
+    padding: 12
+  },
+  settingsTitle: {
+    color: "#18212F",
+    fontSize: 18,
+    fontWeight: "900"
+  },
+  settingsText: {
+    color: "#4B5565",
+    fontSize: 15,
+    lineHeight: 21
+  },
+  settingsInput: {
+    minHeight: 48,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#B8C2D1",
+    color: "#18212F",
+    fontSize: 16,
+    fontWeight: "800",
+    paddingHorizontal: 12
+  },
+  settingsRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 12,
+    justifyContent: "space-between"
+  },
+  settingsRowText: {
+    flex: 1
+  },
+  settingsLabel: {
+    color: "#18212F",
+    fontSize: 16,
+    fontWeight: "900",
+    marginBottom: 2
+  },
+  settingsMeta: {
+    color: "#596579",
+    fontSize: 13,
+    fontWeight: "800"
+  },
+  settingsDisabledAction: {
+    alignItems: "center",
+    backgroundColor: "#EEF2F6",
+    borderRadius: 8,
+    minHeight: 44,
+    justifyContent: "center",
+    paddingHorizontal: 12
+  },
+  settingsDisabledActionText: {
+    color: "#596579",
+    fontSize: 14,
+    fontWeight: "900"
+  },
+  defaultStoreGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  defaultStoreButton: {
+    alignItems: "center",
+    borderColor: "#B8C2D1",
+    borderRadius: 8,
+    borderWidth: 1,
+    justifyContent: "center",
+    minHeight: 44,
+    paddingHorizontal: 12
+  },
+  defaultStoreButtonActive: {
+    backgroundColor: "#12616F",
+    borderColor: "#12616F"
+  },
+  defaultStoreButtonText: {
+    color: "#18212F",
+    fontSize: 14,
+    fontWeight: "900"
+  },
+  defaultStoreButtonTextActive: {
+    color: "#FFFFFF"
   },
   syncPanelHeader: {
     alignItems: "flex-start",
@@ -3432,6 +4107,44 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "900"
   },
+  voiceSearchButton: {
+    minHeight: 44,
+    minWidth: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 8
+  },
+  voiceSearchButtonActive: {
+    opacity: 0.75
+  },
+  microphoneIcon: {
+    alignItems: "center",
+    height: 26,
+    justifyContent: "center",
+    width: 20
+  },
+  microphoneHead: {
+    width: 12,
+    height: 16,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: "#12616F"
+  },
+  microphoneStem: {
+    width: 2,
+    height: 6,
+    backgroundColor: "#12616F"
+  },
+  microphoneBase: {
+    width: 14,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: "#12616F"
+  },
+  microphoneIconActive: {
+    borderColor: "#A33E22",
+    backgroundColor: "#A33E22"
+  },
   primaryButton: {
     flex: 1,
     minHeight: 58,
@@ -3540,6 +4253,12 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
     justifyContent: "center"
   },
+  listPostponeAction: {
+    alignItems: "flex-end",
+    justifyContent: "center",
+    minHeight: 36,
+    paddingLeft: 12
+  },
   quantityColumn: {
     width: 82,
     gap: 6,
@@ -3558,11 +4277,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between"
-  },
-  listCardActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4
   },
   sortButton: {
     width: 32,
