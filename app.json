@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "Smart Shoppingcart",
+    "slug": "smart-shoppingcart",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "smart-shoppingcart",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.pedrofreire.smartshoppingcart"
+    },
+    "android": {
+      "package": "com.pedrofreire.smartshoppingcart",
+      "adaptiveIcon": {
+        "backgroundColor": "#F5F7F9"
+      }
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-sqlite"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "replace-after-eas-init"
+      }
+    }
+  }
+}
