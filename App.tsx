@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Platform,
   SafeAreaView,
   ScrollView,
   StatusBar,
@@ -92,6 +93,8 @@ const SYNC_CLIENT_ID_KEY = "smart-shoppingcart:sync-client-id";
 const SYNC_SPACE_ID_KEY = "smart-shoppingcart:sync-space-id";
 const CURRENT_STORAGE_VERSION = 2;
 const CART_DRAG_STEP = 86;
+const androidStatusBarInset = Platform.OS === "android" ? (StatusBar.currentHeight ?? 24) : 0;
+const androidNavigationBarInset = Platform.OS === "android" ? 24 : 0;
 const sectionNameById = new Map(sections.map((section) => [section.id, section.name]));
 const starterProductById = new Map(starterProducts.map((product) => [product.id, product]));
 const webSearchInputChromeReset = {
@@ -799,7 +802,7 @@ export default function App() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle="dark-content" backgroundColor="#F5F7F9" translucent={false} />
       <View style={[styles.appShell, isCompactLayout && styles.appShellCompact]}>
         <Header
           compact={isCompactLayout}
@@ -2894,7 +2897,9 @@ const sectionCardStyles = StyleSheet.create<Record<SectionId, ViewStyle>>({
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#F5F7F9"
+    backgroundColor: "#F5F7F9",
+    paddingBottom: androidNavigationBarInset,
+    paddingTop: androidStatusBarInset
   },
   appShell: {
     flex: 1,
