@@ -1,1 +1,53 @@
-{}
+{
+  "headerTitle": "Definições",
+  "arranque": {
+    "title": "Arranque",
+    "smartStart": {
+      "label": "Saltar Início",
+      "body": "Quando ligado, abre em Lista se houver produtos; se a Lista estiver vazia, abre em Adicionar."
+    }
+  },
+  "user": {
+    "title": "Utilizador",
+    "intro": "Estas preferências ficam neste telemóvel.",
+    "namePlaceholder": "Nome",
+    "nameLabel": "Nome do utilizador"
+  },
+  "account": {
+    "title": "Conta e palavra-passe",
+    "body": "A app ainda não tem login de utilizador. Para gerir palavras-passe com segurança, o próximo passo é ligar autenticação, por exemplo Supabase Auth, e depois mostrar aqui alterar palavra-passe, terminar sessão e recuperação de conta.",
+    "unavailable": "Gestão de password indisponível"
+  },
+  "family": {
+    "title": "Partilha familiar",
+    "connectedBody": "A usar o código {{code}}. Todos os telemóveis com este código partilham a mesma lista.",
+    "disconnectedBody": "Configure o Supabase para ativar a partilha entre telemóveis. O código fica preparado para quando ligar o sync.",
+    "pillSync": "Sync",
+    "pillLocal": "Local",
+    "codePlaceholder": "codigo-familia",
+    "codeLabel": "Código de família",
+    "useButton": "Usar",
+    "useButtonHint": "Aplica este código à partilha familiar."
+  },
+  "search": {
+    "title": "Pesquisa",
+    "voice": {
+      "label": "Pesquisa por voz",
+      "body": "Mostra o microfone em Lista e Adicionar e usa PT-pt."
+    }
+  },
+  "store": {
+    "title": "Loja",
+    "intro": "Loja ativa: {{name}}. Escolha a loja predefinida deste telemóvel.",
+    "selectHint": "Define como loja predefinida."
+  },
+  "about": {
+    "title": "Sobre esta app",
+    "body": "Smart Shoppingcart ajuda a preparar a lista familiar, adicionar produtos, organizar o carrinho pela ordem da loja e aprender percursos de supermercado.",
+    "meta": "Versão {{version}} · Canal {{channel}}"
+  },
+  "stub": {
+    "emBreve": "Em breve.",
+    "emBreveHint": "Esta secção será preenchida numa próxima atualização."
+  }
+}

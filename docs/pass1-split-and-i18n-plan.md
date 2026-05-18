@@ -1,4 +1,4 @@
-# Pass 1 — `App.tsx` Split + i18n Foundation Plan
+﻿# Pass 1 â€” `App.tsx` Split + i18n Foundation Plan
 
 This document is the execution plan for **W1 (split the monolith with `expo-router`)** and **W2 (extract strings to an i18n catalogue)** of the UX/UI Pass 1 work. It targets Codex as the implementer; Claude is the planner.
 
@@ -10,7 +10,7 @@ The plan is deliberately ordered so every commit ships green: at no point does t
 
 Each screen extraction crosses a string boundary. If strings stay inline, the extracted file accumulates pt-PT JSX that someone has to revisit later. If we extract strings *as* we extract screens, the i18n catalogue grows organically and the second pass over each file is avoided. The two workstreams share the same touch surface, so the cost of bundling them is near-zero and the savings are real.
 
-The same logic applies to **lifting state to stores**. The current `App.tsx` keeps ~20 `useState` calls in one component (App.tsx:159–211) and passes them as props into the screen functions. After the split, those props can't traverse `expo-router` boundaries cleanly. We need stores in place *before* the first screen is moved out.
+The same logic applies to **lifting state to stores**. The current `App.tsx` keeps ~20 `useState` calls in one component (App.tsx:159â€“211) and passes them as props into the screen functions. After the split, those props can't traverse `expo-router` boundaries cleanly. We need stores in place *before* the first screen is moved out.
 
 ---
 
@@ -19,47 +19,47 @@ The same logic applies to **lifting state to stores**. The current `App.tsx` kee
 ### 2.1 File tree
 
 ```
-app/                                     ← expo-router root
-  _layout.tsx                            ← root: providers, fonts, status bar, sync init
-  index.tsx                              ← entry redirector (auth? → /(auth)/welcome ; else → /(app)/home)
+app/                                     â† expo-router root
+  _layout.tsx                            â† root: providers, fonts, status bar, sync init
+  index.tsx                              â† entry redirector (auth? â†’ /(auth)/welcome ; else â†’ /(app)/home)
 
-  (auth)/                                ← unauthenticated stack
-    _layout.tsx                          ← stack header config, brand
-    welcome.tsx                          ← Welcome / value-prop carousel
-    sign-in.tsx                          ← Supabase Auth (email magic-link, Google, Apple)
-    create-household.tsx                 ← post-signup household creation
-    join-household.tsx                   ← redeem invite code / deeplink
+  (auth)/                                â† unauthenticated stack
+    _layout.tsx                          â† stack header config, brand
+    welcome.tsx                          â† Welcome / value-prop carousel
+    sign-in.tsx                          â† Supabase Auth (email magic-link, Google, Apple)
+    create-household.tsx                 â† post-signup household creation
+    join-household.tsx                   â† redeem invite code / deeplink
 
-  (app)/                                 ← authenticated app
-    _layout.tsx                          ← tab bar (compact-aware), header with sync pill + settings
+  (app)/                                 â† authenticated app
+    _layout.tsx                          â† tab bar (compact-aware), header with sync pill + settings
     (tabs)/
-      home.tsx                           ← Home: active household, "Iniciar compra" CTA, next-trip preview
-      list.tsx                           ← Shopping List (planning view)
-      add.tsx                            ← Add Products
+      home.tsx                           â† Home: active household, "Iniciar compra" CTA, next-trip preview
+      list.tsx                           â† Shopping List (planning view)
+      add.tsx                            â† Add Products
       shop/
-        index.tsx                        ← Shop entry: pick store + itinerary, "Treino vs Normal"
+        index.tsx                        â† Shop entry: pick store + itinerary, "Treino vs Normal"
         [storeId]/
-          _layout.tsx                    ← shopping-mode header (sticky section, undo toast)
-          index.tsx                      ← Shopping Mode (cart by store route)
-          summary.tsx                    ← Training Summary / post-trip
-          missing.tsx                    ← Missing Products review
-          route-editor.tsx               ← Route Editor for this store (modal-presented)
+          _layout.tsx                    â† shopping-mode header (sticky section, undo toast)
+          index.tsx                      â† Shopping Mode (cart by store route)
+          summary.tsx                    â† Training Summary / post-trip
+          missing.tsx                    â† Missing Products review
+          route-editor.tsx               â† Route Editor for this store (modal-presented)
     settings/
-      index.tsx                          ← Settings root
-      products.tsx                       ← Manage products (catalog admin)
-      stores.tsx                         ← Manage stores
-      household.tsx                      ← Manage members, leave/transfer
-      account.tsx                        ← Sign out, delete account, export data
+      index.tsx                          â† Settings root
+      products.tsx                       â† Manage products (catalog admin)
+      stores.tsx                         â† Manage stores
+      household.tsx                      â† Manage members, leave/transfer
+      account.tsx                        â† Sign out, delete account, export data
     products/
-      new.tsx                            ← New product (modal)
-      [productId]/edit.tsx               ← Edit product (modal)
+      new.tsx                            â† New product (modal)
+      [productId]/edit.tsx               â† Edit product (modal)
 
 src/
   i18n/
-    index.ts                             ← i18next init, language detector, namespace registry
+    index.ts                             â† i18next init, language detector, namespace registry
     locales/
       pt-PT/
-        common.json                      ← Buttons, statuses, units, shared chrome
+        common.json                      â† Buttons, statuses, units, shared chrome
         welcome.json
         auth.json
         home.json
@@ -71,47 +71,47 @@ src/
         missing.json
         settings.json
         errors.json
-      en/                                ← Same namespaces, English source-of-truth
-      pt-BR/                             ← Light fork of pt-PT (terminology overrides)
-      es/                                ← Spanish for launch
+      en/                                â† Same namespaces, English source-of-truth
+      pt-BR/                             â† Light fork of pt-PT (terminology overrides)
+      es/                                â† Spanish for launch
   state/
-    productsStore.ts                     ← Catalog
-    shoppingListStore.ts                 ← Active list, statuses, undo stack
-    storesStore.ts                       ← Store profiles, selected store, itineraries
-    routesStore.ts                       ← Per-store learned routes, pick events
-    tripStore.ts                         ← Active training/normal trip, lock state
-    settingsStore.ts                     ← smartStart, voice, default store, family code
-    syncStore.ts                         ← Supabase status, realtime channel, last sync
-    authStore.ts                         ← (W5) user + household
-    persistence.ts                       ← zustand persist middleware bound to deviceStorage
+    productsStore.ts                     â† Catalog
+    shoppingListStore.ts                 â† Active list, statuses, undo stack
+    storesStore.ts                       â† Store profiles, selected store, itineraries
+    routesStore.ts                       â† Per-store learned routes, pick events
+    tripStore.ts                         â† Active training/normal trip, lock state
+    settingsStore.ts                     â† smartStart, voice, default store, family code
+    syncStore.ts                         â† Supabase status, realtime channel, last sync
+    authStore.ts                         â† (W5) user + household
+    persistence.ts                       â† zustand persist middleware bound to deviceStorage
   hooks/
-    useVoiceSearch.ts                    ← expo-speech-recognition wrapper, locale-aware
-    useSyncSubscription.ts               ← Supabase realtime channel binding
-    useCompactLayout.ts                  ← isCompactLayout flag from useWindowDimensions
-    useUndoToast.ts                      ← snackbar / toast queue for "Apanhado" undo
-    useHaptics.ts                        ← Platform-aware vibration / haptic feedback
+    useVoiceSearch.ts                    â† expo-speech-recognition wrapper, locale-aware
+    useSyncSubscription.ts               â† Supabase realtime channel binding
+    useCompactLayout.ts                  â† isCompactLayout flag from useWindowDimensions
+    useUndoToast.ts                      â† snackbar / toast queue for "Apanhado" undo
+    useHaptics.ts                        â† Platform-aware vibration / haptic feedback
   ui/
-    tokens.ts                            ← spacing, radius, typography, semantic colours
+    tokens.ts                            â† spacing, radius, typography, semantic colours
     theme/
       lightTheme.ts
-      darkTheme.ts                       ← (Pass 2, but tokens exposed in Pass 1)
+      darkTheme.ts                       â† (Pass 2, but tokens exposed in Pass 1)
     components/
-      AppButton.tsx                      ← primary / secondary / destructive variants
+      AppButton.tsx                      â† primary / secondary / destructive variants
       AppTextInput.tsx
       AppSwitch.tsx
       SectionChip.tsx
       EmptyState.tsx
       SyncPill.tsx
       Snackbar.tsx
-      ScreenScaffold.tsx                 ← SafeArea + header + scroll wrapper
+      ScreenScaffold.tsx                 â† SafeArea + header + scroll wrapper
   domain/
-    routeInference.ts                    ← unchanged
-    listLifecycle.ts                     ← (extracted) buildNextShoppingList, normalize, etc.
+    routeInference.ts                    â† unchanged
+    listLifecycle.ts                     â† (extracted) buildNextShoppingList, normalize, etc.
   data/
-    sampleData.ts                        ← unchanged
+    sampleData.ts                        â† unchanged
   lib/
-    supabase.ts                          ← unchanged
-    deviceStorage.ts / .native.ts        ← unchanged; consumed by state/persistence.ts
+    supabase.ts                          â† unchanged
+    deviceStorage.ts / .native.ts        â† unchanged; consumed by state/persistence.ts
 ```
 
 `App.tsx` ceases to exist at the end. `package.json` `main` flips from `expo/AppEntry` to `expo-router/entry`.
@@ -123,25 +123,25 @@ Each store is a zustand store with `persist` middleware bound to `src/lib/device
 | Store | Owns | Currently in App.tsx (lines) |
 |---|---|---|
 | `productsStore` | `products: Product[]`, CRUD, favourites, normalization | 194, 213 |
-| `shoppingListStore` | `shoppingItems`, `lastChange` (undo), `shoppingDoneNotice`, `departmentFilter`, `listSearch`, `addSearch` | 195–203 |
-| `storesStore` | `supermarketProfiles`, `selectedStoreId`, `storeStopOrders`, `storeProductOrders` | 115–122, 185–193 |
-| `routesStore` | `itinerary`, `storeItineraries`, `pickEvents` | 181–184, 198 |
-| `tripStore` | `isCheckoutLocked`, `lockedPickingIds`, `activeTripItemIds`, trip type (normal/training) | 204–210 |
-| `settingsStore` | `userName`, `voiceSearchEnabled`, `defaultStoreId`, `smartStartEnabled`, locale | 81–86, 151–156, 168 |
-| `syncStore` | `syncStatus`, `syncMessage`, `activeSyncSpaceId`, client id, last server `updated_at` | 177–180, 161–167 |
-| `authStore` | (W5 — empty for now) user, household, members | — |
+| `shoppingListStore` | `shoppingItems`, `lastChange` (undo), `shoppingDoneNotice`, `departmentFilter`, `listSearch`, `addSearch` | 195â€“203 |
+| `storesStore` | `supermarketProfiles`, `selectedStoreId`, `storeStopOrders`, `storeProductOrders` | 115â€“122, 185â€“193 |
+| `routesStore` | `itinerary`, `storeItineraries`, `pickEvents` | 181â€“184, 198 |
+| `tripStore` | `isCheckoutLocked`, `lockedPickingIds`, `activeTripItemIds`, trip type (normal/training) | 204â€“210 |
+| `settingsStore` | `userName`, `voiceSearchEnabled`, `defaultStoreId`, `smartStartEnabled`, locale | 81â€“86, 151â€“156, 168 |
+| `syncStore` | `syncStatus`, `syncMessage`, `activeSyncSpaceId`, client id, last server `updated_at` | 177â€“180, 161â€“167 |
+| `authStore` | (W5 â€” empty for now) user, household, members | â€” |
 
-The four `useRef`-stored mutables (`syncClientId`, `remoteApplyInProgress`, `remoteReady`, `syncTimeout`, App.tsx:161–166) move into `syncStore`'s internal closure, not React refs.
+The four `useRef`-stored mutables (`syncClientId`, `remoteApplyInProgress`, `remoteReady`, `syncTimeout`, App.tsx:161â€“166) move into `syncStore`'s internal closure, not React refs.
 
 ### 2.3 Provider tree (root `app/_layout.tsx`)
 
 ```
 <I18nextProvider>
-  <ThemeProvider>                  ← Pass 1 stub: tokens only, Pass 2 fills dark mode
+  <ThemeProvider>                  â† Pass 1 stub: tokens only, Pass 2 fills dark mode
     <SafeAreaProvider>
-      <SyncBootstrap>              ← reads syncStore, mounts useSyncSubscription
-        <Stack> / <Tabs>           ← expo-router shell
-          <SnackbarHost />         ← portal for undo toasts
+      <SyncBootstrap>              â† reads syncStore, mounts useSyncSubscription
+        <Stack> / <Tabs>           â† expo-router shell
+          <SnackbarHost />         â† portal for undo toasts
         </Stack>
       </SyncBootstrap>
     </SafeAreaProvider>
@@ -149,7 +149,7 @@ The four `useRef`-stored mutables (`syncClientId`, `remoteApplyInProgress`, `rem
 </I18nextProvider>
 ```
 
-Zustand stores don't need providers — they're singletons imported directly. The only provider count growth is **i18next + theme + safe-area + snackbar host**. Auth context joins in W5.
+Zustand stores don't need providers â€” they're singletons imported directly. The only provider count growth is **i18next + theme + safe-area + snackbar host**. Auth context joins in W5.
 
 ### 2.4 i18n contract
 
@@ -158,7 +158,7 @@ Zustand stores don't need providers — they're singletons imported directly. Th
 - **Runtime default locale**: `pt-PT` for the household testing build. `en` remains the fallback if a key is missing.
 - **Locale forks**: `pt-BR` is a thin overlay over `pt-PT`, `es` is independent.
 - **Namespace per screen**, plus `common`, `errors`. Screens use `useTranslation('list')` and call `t('emptyState.title')`.
-- **No string concatenation across `t()` calls** — every full sentence is one key. ICU/i18next interpolation for product names, counts, dates.
+- **No string concatenation across `t()` calls** â€” every full sentence is one key. ICU/i18next interpolation for product names, counts, dates.
 - **Pluralization**: i18next built-in plural rules. Counts use `{{count}}`.
 - **Dates and numbers**: `Intl.DateTimeFormat` / `Intl.NumberFormat` via the current locale; helper in `src/i18n/format.ts`.
 - **Voice search locale**: read from `settingsStore.locale`, no longer hard-coded (App.tsx:101).
@@ -167,44 +167,44 @@ Zustand stores don't need providers — they're singletons imported directly. Th
 
 ---
 
-## 3. Migration sequence — eleven commits, each shippable
+## 3. Migration sequence â€” eleven commits, each shippable
 
 Every commit must:
 - Pass `npm run typecheck`.
 - Render in Expo Go on iOS + Android + web without runtime errors.
 - Leave the user-facing app fully functional (no regressions in flows the user already had).
 
-Commits 1–3 set up infrastructure with **zero UX change**. Commits 4–10 are screen-by-screen extractions. Commit 11 deletes the monolith.
+Commits 1â€“3 set up infrastructure with **zero UX change**. Commits 4â€“10 are screen-by-screen extractions. Commit 11 deletes the monolith.
 
-### Commit 1 — Install dependencies, switch entry to `expo-router`
+### Commit 1 â€” Install dependencies, switch entry to `expo-router`
 
 - Add: `expo-router`, `react-native-screens`, `react-native-safe-area-context`, `zustand`, `immer`, `i18next`, `react-i18next`, `expo-localization`.
-- Flip `package.json` → `"main": "expo-router/entry"`.
+- Flip `package.json` â†’ `"main": "expo-router/entry"`.
 - Create `app/_layout.tsx` that **renders the existing `App` component verbatim** at the root index. The router is alive; the app still looks the same.
 - Create `app/index.tsx` that re-exports the current `App.tsx` default export.
 - No screen extraction yet. No store creation yet. The router shell exists; routes are placeholders.
 
 **Risk**: Web bundler may need `metro.config.js` tweaks (`unstable_enablePackageExports`); test all three platforms.
 
-### Commit 2 — Scaffold state stores (no consumers)
+### Commit 2 â€” Scaffold state stores (no consumers)
 
 - Create the seven store files in `src/state/` with the full state shape and actions, but **no React component reads from them yet**. The monolith still holds the live values.
-- Implement `state/persistence.ts` — a zustand storage adapter that calls `getDeviceLocalStorage()` from `src/lib/deviceStorage.ts`, preserving the current storage keys (App.tsx:95–98) so persisted data survives the migration.
+- Implement `state/persistence.ts` â€” a zustand storage adapter that calls `getDeviceLocalStorage()` from `src/lib/deviceStorage.ts`, preserving the current storage keys (App.tsx:95â€“98) so persisted data survives the migration.
 - Add an "import legacy state" one-shot in each store that reads the existing `STORAGE_KEY` blob and hydrates the new stores. This runs once on first launch after the migration.
 
 **Verification**: launch the app, confirm `STORAGE_KEY` blob is read, confirm each store reports the legacy values via a temporary debug log (removed in Commit 3).
 
-### Commit 3 — Scaffold i18n catalogue (still no consumers)
+### Commit 3 â€” Scaffold i18n catalogue (still no consumers)
 
 - Create `src/i18n/index.ts` that initialises `i18next` with `en` and `pt-PT` namespaces (empty `.json` files for each screen).
 - Wrap `app/_layout.tsx` in `<I18nextProvider>`.
 - Add the synchronous legacy-store bootstrap guard in `app/_layout.tsx` before any routed screen can consume stores. This is intentionally early, before Commit 4 extracts Welcome.
-- Add the `npm run i18n:check` script (a simple grep-based check that fails when JSX `<Text>…</Text>` literals appear in any file under `app/` or `src/state/`; warnings only at this stage).
+- Add the `npm run i18n:check` script (a simple grep-based check that fails when JSX `<Text>â€¦</Text>` literals appear in any file under `app/` or `src/state/`; warnings only at this stage).
 - Document the locale-fallback policy in `src/i18n/README.md`.
 
 After commit 3: infrastructure is in place; the monolith still owns every screen. We can now extract one screen at a time.
 
-### Commit 4 — Extract **Welcome** (`(auth)/welcome.tsx`)
+### Commit 4 â€” Extract **Welcome** (`(auth)/welcome.tsx`)
 
 The simplest screen, no state mutations, no business logic. Used to pressure-test the extraction recipe.
 
@@ -216,47 +216,47 @@ For every screen extraction, the recipe is:
 5. Add `accessibilityRole`, `accessibilityLabel` to every interactive element (Pass-1 a11y baseline).
 6. Delete the screen function from `App.tsx`; replace its render branch with `<Redirect href="/welcome" />` until the router can fully take over (Commit 11).
 
-Welcome specifically: the three step cards (App.tsx:1216–1250) become a `FlatList` with `pagingEnabled` (so step navigation is on-rails) and a primary CTA "Começar".
+Welcome specifically: the three step cards (App.tsx:1216â€“1250) become a `FlatList` with `pagingEnabled` (so step navigation is on-rails) and a primary CTA "ComeÃ§ar".
 
-### Commit 5 — Extract **Settings** (`(app)/settings/index.tsx`)
+### Commit 5 â€” Extract **Settings** (`(app)/settings/index.tsx`)
 
-Settings has lots of strings and is mostly leaf nodes — great second target. Splits into four sub-routes (`products`, `stores`, `household`, `account`), but only `index.tsx` is implemented in this commit. The other three are stubs with "Em breve" copy.
+Settings has lots of strings and is mostly leaf nodes â€” great second target. Splits into four sub-routes (`products`, `stores`, `household`, `account`), but only `index.tsx` is implemented in this commit. The other three are stubs with "Em breve" copy.
 
 Side effect: pulls `settingsStore` into actual use. The `voiceSearchEnabled` toggle now reads/writes the store, not a local state.
 
-### Commit 6 — Extract **List** (`(app)/(tabs)/list.tsx`)
+### Commit 6 â€” Extract **List** (`(app)/(tabs)/list.tsx`)
 
-First non-trivial screen. Brings `shoppingListStore` and `productsStore` online. The hidden row-tap-toggles-alternatives behaviour (App.tsx:1523) is **explicitly replaced** with a labelled switch on the row — this is part of the UX-issue-5 fix from the synthesis. Note: this is the first UX *change*, not just a refactor; flag it for Codex.
+First non-trivial screen. Brings `shoppingListStore` and `productsStore` online. The hidden row-tap-toggles-alternatives behaviour (App.tsx:1523) is **explicitly replaced** with a labelled switch on the row â€” this is part of the UX-issue-5 fix from the synthesis. Note: this is the first UX *change*, not just a refactor; flag it for Codex.
 
-### Commit 7 — Extract **Add** (`(app)/(tabs)/add.tsx`)
+### Commit 7 â€” Extract **Add** (`(app)/(tabs)/add.tsx`)
 
-Brings `productsStore` mutation actions online. The "Produto novo" inline form (App.tsx:1712–1750) moves to a dedicated modal route `app/(app)/products/new.tsx`. The card-edit inline form (App.tsx:1757–1819) moves to `app/(app)/products/[productId]/edit.tsx`. Both are presented modally via `expo-router`'s `presentation: 'modal'` option.
+Brings `productsStore` mutation actions online. The "Produto novo" inline form (App.tsx:1712â€“1750) moves to a dedicated modal route `app/(app)/products/new.tsx`. The card-edit inline form (App.tsx:1757â€“1819) moves to `app/(app)/products/[productId]/edit.tsx`. Both are presented modally via `expo-router`'s `presentation: 'modal'` option.
 
-### Commit 8 — Extract **Shop** entry + cart (`(app)/(tabs)/shop/index.tsx` and `[storeId]/index.tsx`)
+### Commit 8 â€” Extract **Shop** entry + cart (`(app)/(tabs)/shop/index.tsx` and `[storeId]/index.tsx`)
 
-The biggest extraction. **Defer the drag-and-drop and pick-row UX rewrite to W4** — keep the existing Responder-API drag code as-is inside the new file. The goal of this commit is structural only.
+The biggest extraction. **Defer the drag-and-drop and pick-row UX rewrite to W4** â€” keep the existing Responder-API drag code as-is inside the new file. The goal of this commit is structural only.
 
-`tripStore`, `routesStore`, `storesStore` all come online here. The undo button moves to a `Snackbar` rendered by `SnackbarHost` in the root layout, surfaced via `useUndoToast()` (App.tsx:2034–2040 disappears from the screen; the toast handles it).
+`tripStore`, `routesStore`, `storesStore` all come online here. The undo button moves to a `Snackbar` rendered by `SnackbarHost` in the root layout, surfaced via `useUndoToast()` (App.tsx:2034â€“2040 disappears from the screen; the toast handles it).
 
-The route-editor inline panel (App.tsx:1971–1998) moves to `app/(app)/shop/[storeId]/route-editor.tsx`, modal-presented.
+The route-editor inline panel (App.tsx:1971â€“1998) moves to `app/(app)/shop/[storeId]/route-editor.tsx`, modal-presented.
 
-### Commit 9 — Extract **Summary** (`shop/[storeId]/summary.tsx`)
+### Commit 9 â€” Extract **Summary** (`shop/[storeId]/summary.tsx`)
 
-Small screen. Adds the missing V1 actions: rename itinerary, discard training trip, adjust order inline. The confidence display gains a threshold band (≥0.6 green, 0.3–0.6 amber, <0.3 red) — minor UX improvement, low-cost.
+Small screen. Adds the missing V1 actions: rename itinerary, discard training trip, adjust order inline. The confidence display gains a threshold band (â‰¥0.6 green, 0.3â€“0.6 amber, <0.3 red) â€” minor UX improvement, low-cost.
 
-### Commit 10 — Build new screens that the monolith never had
+### Commit 10 â€” Build new screens that the monolith never had
 
 The split is now complete for the original six screens. This commit fills the V1 gaps that have no source code to migrate:
 
-- `(app)/(tabs)/home.tsx` — Home as a proper landing screen.
-- `shop/[storeId]/missing.tsx` — Missing Products screen.
-- `(auth)/sign-in.tsx`, `create-household.tsx`, `join-household.tsx` — placeholders if W5 (auth) is not yet in scope; otherwise full implementations.
+- `(app)/(tabs)/home.tsx` â€” Home as a proper landing screen.
+- `shop/[storeId]/missing.tsx` â€” Missing Products screen.
+- `(auth)/sign-in.tsx`, `create-household.tsx`, `join-household.tsx` â€” placeholders if W5 (auth) is not yet in scope; otherwise full implementations.
 
 If W5 isn't ready, sign-in/create-household are stubbed and `(app)` routes assume a single local household. This is acceptable; the V1 spec already allows local-first usage.
 
-### Commit 11 — Delete `App.tsx`
+### Commit 11 â€” Delete `App.tsx`
 
-The monolith is now empty (or down to a few utility functions). Move any remaining helpers to `src/domain/listLifecycle.ts` (`buildNextShoppingList`, `normalizeExistingProduct`, etc.). Delete `App.tsx`. Flip `app/index.tsx` from a re-export to the actual redirector logic (auth check → `/(auth)/welcome` or `/(app)/home`).
+The monolith is now empty (or down to a few utility functions). Move any remaining helpers to `src/domain/listLifecycle.ts` (`buildNextShoppingList`, `normalizeExistingProduct`, etc.). Delete `App.tsx`. Flip `app/index.tsx` from a re-export to the actual redirector logic (auth check â†’ `/(auth)/welcome` or `/(app)/home`).
 
 `npm run i18n:check` is upgraded from warning to error.
 
@@ -266,11 +266,11 @@ The monolith is now empty (or down to a few utility functions). Move any remaini
 
 The following are deliberately not in W1+W2 and should not slip in during this work:
 
-- **Shopping Mode UX rewrite (W4)** — the drag-and-drop, haptics, section dividers, swipe actions. Codex must not "fix" this during Commit 8; the structural move is the *only* goal of that commit. Pre-empting W4 inside W1 explodes the diff and breaks the green-on-every-commit discipline.
-- **Visual / Pass 2** — colours, icons, dark mode, motion. Tokens are scaffolded in `src/ui/tokens.ts` but their *values* stay equivalent to the current hard-coded hexes (App.tsx:3453+).
-- **RLS, account deletion, auth UI (W5)** — placeholders are fine; full implementation is its own workstream.
-- **Telemetry (Sentry/PostHog)** — separate workstream.
-- **The 11-sections-vs-10-section-card-styles mismatch** (sampleData.ts vs App.tsx:3395–3450) — fixed only as a one-line bonus during Commit 6, not chased into a refactor.
+- **Shopping Mode UX rewrite (W4)** â€” the drag-and-drop, haptics, section dividers, swipe actions. Codex must not "fix" this during Commit 8; the structural move is the *only* goal of that commit. Pre-empting W4 inside W1 explodes the diff and breaks the green-on-every-commit discipline.
+- **Visual / Pass 2** â€” colours, icons, dark mode, motion. Tokens are scaffolded in `src/ui/tokens.ts` but their *values* stay equivalent to the current hard-coded hexes (App.tsx:3453+).
+- **RLS, account deletion, auth UI (W5)** â€” placeholders are fine; full implementation is its own workstream.
+- **Telemetry (Sentry/PostHog)** â€” separate workstream.
+- **The 11-sections-vs-10-section-card-styles mismatch** (sampleData.ts vs App.tsx:3395â€“3450) â€” fixed only as a one-line bonus during Commit 6, not chased into a refactor.
 
 ---
 
@@ -281,14 +281,14 @@ The following are deliberately not in W1+W2 and should not slip in during this w
 3. The seven `src/state/*Store.ts` files own all app-wide state. No screen file declares `useState` for app-wide data (only for local UI: search input focus, modal open/closed, etc.).
 4. `expo-router` resolves all routes; the V1 ten-screen map has a file path for every screen (some still stubs).
 5. Every interactive element has an `accessibilityRole` and an `accessibilityLabel` keyed to i18n.
-6. `npm run typecheck`, `npm run i18n:check`, and a manual smoke test of the six original flows (welcome → add → list → shop → checkout → summary → settings) all pass on iOS, Android, and web.
-7. The persisted state from before the migration is read intact on first launch after migration — no household loses their list.
+6. `npm run typecheck`, `npm run i18n:check`, and a manual smoke test of the six original flows (welcome â†’ add â†’ list â†’ shop â†’ checkout â†’ summary â†’ settings) all pass on iOS, Android, and web.
+7. The persisted state from before the migration is read intact on first launch after migration â€” no household loses their list.
 
 ---
 
 ## 6. Risks and where to slow down
 
-- **Persistence hydration race** in Commit 2. The legacy import must run *before* any store consumer mounts; otherwise stores hydrate with defaults and overwrite the legacy blob. The fix is a synchronous import in `app/_layout.tsx` before children render — verify with a fresh install carrying a real `STORAGE_KEY` blob from the staging build.
+- **Persistence hydration race** in Commit 2. The legacy import must run *before* any store consumer mounts; otherwise stores hydrate with defaults and overwrite the legacy blob. The fix is a synchronous import in `app/_layout.tsx` before children render â€” verify with a fresh install carrying a real `STORAGE_KEY` blob from the staging build.
 - **Web bundler regressions**. `expo-router` + `react-native-web` 0.21 sometimes needs `metro.config.js` adjustments. Test Commit 1 on web first; don't proceed to Commit 2 with a broken web build.
 - **Translation drift between locales**. Establish that `en` is the source of truth and `pt-PT` is co-edited by Pedro. Other locales are generated by translator pass after Pass 1 closes.
 - **Codex over-refactoring**. Each commit should be small. If Codex bundles two screen extractions into one commit, reject the diff. The cadence is the point.
@@ -297,7 +297,7 @@ The following are deliberately not in W1+W2 and should not slip in during this w
 
 ## 7. Suggested cadence
 
-Eleven commits, one per working session, is achievable in two to three weeks at a sustainable pace, assuming Codex handles the mechanical work and Pedro reviews each commit. If Pedro wants to start sooner, commits 1–3 are the safest place to begin because they're additive and reversible.
+Eleven commits, one per working session, is achievable in two to three weeks at a sustainable pace, assuming Codex handles the mechanical work and Pedro reviews each commit. If Pedro wants to start sooner, commits 1â€“3 are the safest place to begin because they're additive and reversible.
 
 Once W1+W2 land, the rest of Pass 1 (W3 accessibility AA, W4 Shopping Mode rewrite, W5 missing screens, W6 token consolidation) becomes parallelizable across Codex sessions because the file boundaries finally support it.
 
@@ -362,6 +362,7 @@ Next recommended step:
 
 Signed-off-by: Codex <codex@openai.com>
 
+
 ### 2026-05-17 21:53 Europe/Lisbon - Codex
 
 Status: Commit 3 infrastructure is implemented. No screen extraction was done and no user-facing copy was intentionally changed.
@@ -369,9 +370,9 @@ Status: Commit 3 infrastructure is implemented. No screen extraction was done an
 References:
 
 - `docs/commit-3-i18n-brief.md`
-- Plan §3, Commit 3
-- Plan §6 persistence hydration race warning
-- Plan §8 execution log requirements
+- Plan Â§3, Commit 3
+- Plan Â§6 persistence hydration race warning
+- Plan Â§8 execution log requirements
 
 Completed:
 
@@ -555,12 +556,12 @@ Status: Commit 4 implementation complete. Welcome is now an `expo-router` auth r
 Completed:
 
 - Added `app/(auth)/_layout.tsx`.
-- Added `app/(auth)/welcome.tsx` with a paged `FlatList`, three step cards, indicator dots, and a primary `Começar` CTA.
+- Added `app/(auth)/welcome.tsx` with a paged `FlatList`, three step cards, indicator dots, and a primary `ComeÃ§ar` CTA.
 - Deleted `WelcomeScreen` and its dedicated styles from `App.tsx`.
 - Replaced the old `screen === "welcome"` render branch with `<Redirect href="/welcome" />`.
 - Added Welcome strings to `src/i18n/locales/pt-PT/welcome.json` and `src/i18n/locales/en/welcome.json`; other namespaces remain unchanged.
 - Added accessibility role/label/hint coverage for the CTA and step cards.
-- Kept the temporary legacy settings bridge so pressing `Começar` updates both `settingsStore` and `smart-shoppingcart:user-settings:v1` while the monolith still reads that legacy key.
+- Kept the temporary legacy settings bridge so pressing `ComeÃ§ar` updates both `settingsStore` and `smart-shoppingcart:user-settings:v1` while the monolith still reads that legacy key.
 - Replaced the `zustand/middleware` dependency usage with the local persist helper in `src/state/persistence.ts` and the store files. This fixed a web runtime parse error where the bundled dependency emitted `import.meta` into a classic script.
 - Included `docs/commit-4-welcome-and-cleanup-brief.md` as the supporting instruction brief.
 
@@ -571,7 +572,7 @@ Validation:
 - `npx expo export --platform web --clear --output-dir dist-router-smoke` passed; the temporary export folder was deleted after smoke validation.
 - Headless Edge smoke against the exported web build passed:
   - fresh state: `/` redirected to `/welcome`, headline and all three step cards rendered
-  - CTA: clicking `Começar` persisted `smartStartEnabled: true` to the legacy settings key and returned to `/`
+  - CTA: clicking `ComeÃ§ar` persisted `smartStartEnabled: true` to the legacy settings key and returned to `/`
   - returning user: pre-seeded `smartStartEnabled: true` loaded `/` and skipped Welcome
   - reset: setting `smartStartEnabled: false` and clearing the new settings store loaded Welcome again
   - browser runtime exceptions: none
@@ -585,5 +586,48 @@ Flags / Roadblocks:
 Next recommended step:
 
 - Commit 5 - extract Settings (`(app)/settings/index.tsx`).
+
+Signed-off-by: Codex <codex@openai.com>
+
+### 2026-05-18 22:33 Europe/Lisbon - Codex - Pass 1 commit 5 (Settings)
+
+Status: Commit 5 implementation complete. Settings is now an `expo-router` app route at `app/(app)/settings/index.tsx`; the monolith redirects the old settings branch to `/settings`.
+
+Completed:
+
+- Added `app/(app)/_layout.tsx` as the minimal app route-group stack.
+- Added `app/(app)/settings/_layout.tsx` with the localized Settings header title.
+- Added `app/(app)/settings/index.tsx` with the seven existing Settings panels moved out of `App.tsx`.
+- Added the four planned stub routes: `products`, `stores`, `household`, and `account`, each rendering the localized "Em breve." placeholder.
+- Replaced the old `screen === "settings"` render branch in `App.tsx` with `<Redirect href="/settings" />`.
+- Deleted the monolith `SettingsScreen` function and its Settings-only styles from `App.tsx`.
+- Populated `src/i18n/locales/pt-PT/settings.json` and `src/i18n/locales/en/settings.json`; other locale namespaces remain unchanged.
+- Brought `useSettingsStore`, `useStoresStore`, and `useSyncStore` online as the Settings route's runtime state sources.
+- Added `commitSyncSpaceDraft()` to `useSyncStore` so the family-sharing draft is normalized, saved, and reflected in the route state.
+- Included `docs/commit-5-settings-brief.md` as the supporting instruction brief.
+
+Validation:
+
+- `npm run typecheck` passed.
+- `npm run i18n:check` passed in warning mode with no plain JSX text nodes found.
+- `npx expo export --platform web --clear --output-dir dist-router-smoke` passed; the temporary export folder was deleted after smoke validation.
+- Headless Edge smoke against the exported web build passed:
+  - Settings reachable: `/settings` rendered all seven panels.
+  - Toggles persist: `Saltar InÃ­cio` and `Pesquisa por voz` could be toggled and survived reload through `useSettingsStore`.
+  - Name persists: `Nome do utilizador` accepted `Pedro Smoke` and survived reload.
+  - Default store persists: selecting `Lidl` updated `Loja ativa: Lidl` and survived reload.
+  - Sync space draft + save: entering `Familia Teste 42` and pressing `Usar` normalized and committed `familia-teste-42`; the local status pill remained `Local` in the current environment.
+  - Sub-route stubs reachable: `/settings/products`, `/settings/stores`, `/settings/household`, and `/settings/account` each rendered `Em breve.`.
+  - Welcome path still works: clearing `localStorage` showed Welcome at `/`, and pressing `ComeÃ§ar` returned to `/`.
+
+Flags / Roadblocks:
+
+- Settings now consumes the zustand stores directly, while the remaining monolith screens still own their local state until their extraction commits.
+- The Settings route keeps the same V1 account placeholder copy; real auth wiring remains out of scope.
+- The Settings sync status reflects the local `useSyncStore`; full remote sync integration remains with the existing monolith flow until later sync work.
+
+Next recommended step:
+
+- Commit 6 - extract List (`(app)/(tabs)/list.tsx`). This is also where the deliberate UX-issue-5 fix lands: replace the hidden row-tap-toggles-alternatives behavior with a labelled switch on the row.
 
 Signed-off-by: Codex <codex@openai.com>

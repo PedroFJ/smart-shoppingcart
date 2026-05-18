@@ -43,6 +43,7 @@ const defaultStoreItineraries = supermarketProfiles.reduce<StoreItineraries>((it
 }, {});
 
 type StoresState = {
+  supermarketProfiles: SupermarketProfile[];
   selectedStoreId: string;
   storeItineraries: StoreItineraries;
   storeStopOrders: StoreStopOrders;
@@ -57,6 +58,7 @@ type StoresState = {
 export const useStoresStore = create<StoresState>()(
   persist<StoresState>(
     (set) => ({
+      supermarketProfiles,
       selectedStoreId: legacyState?.selectedStoreId ?? defaultStoreId,
       storeItineraries: legacyState?.storeItineraries ?? defaultStoreItineraries,
       storeStopOrders: legacyState?.storeStopOrders ?? { supercor: defaultSupercorStopOrder },

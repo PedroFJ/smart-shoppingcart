@@ -5,7 +5,6 @@ import {
   ScrollView,
   StatusBar,
   StyleSheet,
-  Switch,
   TextStyle,
   Text,
   TextInput,
@@ -100,8 +99,6 @@ const SYNC_SPACE_ID_KEY = "smart-shoppingcart:sync-space-id";
 const CURRENT_STORAGE_VERSION = 2;
 const CART_DRAG_STEP = 86;
 const VOICE_SEARCH_LOCALE = "pt-PT";
-const APP_VERSION = "0.1.1";
-const UPDATE_CHANNEL = "staging";
 const searchStopWords = new Set(["a", "as", "o", "os", "de", "da", "das", "do", "dos", "e", "the", "of", "for"]);
 const androidStatusBarInset = Platform.OS === "android" ? (StatusBar.currentHeight ?? 24) : 0;
 const androidNavigationBarInset = Platform.OS === "android" ? 24 : 0;
@@ -176,7 +173,6 @@ export default function App() {
     return initialNeededItems.length > 0 ? "list" : "add";
   });
   const [activeSyncSpaceId, setActiveSyncSpaceId] = useState(getInitialSyncSpaceId);
-  const [syncSpaceDraft, setSyncSpaceDraft] = useState(() => getInitialSyncSpaceId());
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(isSupabaseConfigured ? "loading" : "local");
   const [syncMessage, setSyncMessage] = useState(isSupabaseConfigured ? "A sincronizar" : "Modo local");
   const [itinerary, setItinerary] = useState<SectionId[]>(() => initialAppState?.itinerary ?? defaultItinerary);
@@ -829,24 +825,6 @@ export default function App() {
     setScreen("list");
   }
 
-  function saveSyncSpace() {
-    const nextSyncSpaceId = normalizeSyncSpaceId(syncSpaceDraft);
-    const storage = getLocalStorage();
-
-    storage?.setItem(SYNC_SPACE_ID_KEY, nextSyncSpaceId);
-    setSyncSpaceDraft(nextSyncSpaceId);
-    setActiveSyncSpaceId(nextSyncSpaceId);
-
-    if (!isSupabaseConfigured) {
-      setSyncStatus("local");
-      setSyncMessage("Modo local");
-      return;
-    }
-
-    setSyncStatus("loading");
-    setSyncMessage(`A carregar ${nextSyncSpaceId}`);
-  }
-
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#F5F7F9" translucent={false} />
@@ -908,25 +886,7 @@ export default function App() {
           />
         )}
 
-        {screen === "settings" && (
-          <SettingsScreen
-            activeSyncSpaceId={activeSyncSpaceId}
-            isSupabaseConfigured={isSupabaseConfigured}
-            localUserSettings={localUserSettings}
-            onChangeLocalUserSettings={setLocalUserSettings}
-            onSaveSyncSpace={saveSyncSpace}
-            onSyncSpaceDraftChange={setSyncSpaceDraft}
-            onSelectDefaultStore={(storeId) => {
-              setLocalUserSettings((current) => ({ ...current, defaultStoreId: storeId }));
-              setSelectedStoreId(storeId);
-            }}
-            stores={supermarketProfiles}
-            selectedDefaultStoreId={localUserSettings.defaultStoreId}
-            selectedStoreName={selectedStore.name}
-            syncSpaceDraft={syncSpaceDraft}
-            syncStatus={syncStatus}
-          />
-        )}
+        {screen === "settings" && <Redirect href="/settings" />}
 
         {screen === "shop" && (
           <ShopScreen
@@ -1212,152 +1172,6 @@ function NavigationTabs({
           </TouchableOpacity>
         );
       })}
-    </ScrollView>
-  );
-}
-
-function SettingsScreen({
-  activeSyncSpaceId,
-  isSupabaseConfigured,
-  localUserSettings,
-  onChangeLocalUserSettings,
-  onSaveSyncSpace,
-  onSyncSpaceDraftChange,
-  onSelectDefaultStore,
-  stores,
-  selectedDefaultStoreId,
-  selectedStoreName,
-  syncSpaceDraft,
-  syncStatus
-}: {
-  activeSyncSpaceId: string;
-  isSupabaseConfigured: boolean;
-  localUserSettings: LocalUserSettings;
-  onChangeLocalUserSettings: (settings: LocalUserSettings) => void;
-  onSaveSyncSpace: () => void;
-  onSyncSpaceDraftChange: (value: string) => void;
-  onSelectDefaultStore: (storeId: string) => void;
-  stores: SupermarketProfile[];
-  selectedDefaultStoreId: string;
-  selectedStoreName: string;
-  syncSpaceDraft: string;
-  syncStatus: SyncStatus;
-}) {
-  function updateLocalSettings(patch: Partial<LocalUserSettings>) {
-    onChangeLocalUserSettings({ ...localUserSettings, ...patch });
-  }
-
-  return (
-    <ScrollView contentContainerStyle={styles.settingsContent}>
-      <View style={styles.settingsPanel}>
-        <Text style={styles.settingsTitle}>Arranque</Text>
-        <View style={styles.settingsRow}>
-          <View style={styles.settingsRowText}>
-            <Text style={styles.settingsLabel}>Saltar Início</Text>
-            <Text style={styles.settingsText}>Quando ligado, abre em Lista se houver produtos; se a Lista estiver vazia, abre em Adicionar.</Text>
-          </View>
-          <Switch
-            value={localUserSettings.smartStartEnabled}
-            onValueChange={(smartStartEnabled) => updateLocalSettings({ smartStartEnabled })}
-            trackColor={{ false: "#C8D0DB", true: "#9AD4D9" }}
-            thumbColor={localUserSettings.smartStartEnabled ? "#12616F" : "#F7F9FC"}
-          />
-        </View>
-      </View>
-
-      <View style={styles.settingsPanel}>
-        <Text style={styles.settingsTitle}>Utilizador</Text>
-        <Text style={styles.settingsText}>Estas preferências ficam neste telemóvel.</Text>
-        <TextInput
-          style={styles.settingsInput}
-          value={localUserSettings.userName}
-          onChangeText={(userName) => updateLocalSettings({ userName })}
-          placeholder="Nome"
-        />
-      </View>
-
-      <View style={styles.settingsPanel}>
-        <Text style={styles.settingsTitle}>Conta e palavra-passe</Text>
-        <Text style={styles.settingsText}>
-          A app ainda não tem login de utilizador. Para gerir palavras-passe com segurança, o próximo passo é ligar autenticação, por exemplo Supabase Auth, e depois mostrar aqui alterar palavra-passe, terminar sessão e recuperação de conta.
-        </Text>
-        <View style={styles.settingsDisabledAction}>
-          <Text style={styles.settingsDisabledActionText}>Gestão de password indisponível</Text>
-        </View>
-      </View>
-
-      <View style={styles.settingsPanel}>
-        <Text style={styles.settingsTitle}>Partilha familiar</Text>
-        <View style={styles.syncPanelHeader}>
-          <View style={styles.syncPanelText}>
-            <Text style={styles.settingsText}>
-              {isSupabaseConfigured
-                ? `A usar o código ${activeSyncSpaceId}. Todos os telemóveis com este código partilham a mesma lista.`
-                : "Configure o Supabase para ativar a partilha entre telemóveis. O código fica preparado para quando ligar o sync."}
-            </Text>
-          </View>
-          <Text style={[styles.syncPill, getSyncPillStyle(syncStatus)]}>
-            {isSupabaseConfigured ? "Sync" : "Local"}
-          </Text>
-        </View>
-        <View style={styles.syncSpaceRow}>
-          <TextInput
-            autoCapitalize="none"
-            autoCorrect={false}
-            style={styles.syncSpaceInput}
-            value={syncSpaceDraft}
-            onChangeText={onSyncSpaceDraftChange}
-            placeholder="codigo-familia"
-          />
-          <TouchableOpacity style={styles.syncSpaceButton} onPress={onSaveSyncSpace}>
-            <Text style={styles.syncSpaceButtonText}>Usar</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <View style={styles.settingsPanel}>
-        <Text style={styles.settingsTitle}>Pesquisa</Text>
-        <View style={styles.settingsRow}>
-          <View style={styles.settingsRowText}>
-            <Text style={styles.settingsLabel}>Pesquisa por voz</Text>
-            <Text style={styles.settingsText}>Mostra o microfone em Lista e Adicionar e usa PT-pt.</Text>
-          </View>
-          <Switch
-            value={localUserSettings.voiceSearchEnabled}
-            onValueChange={(voiceSearchEnabled) => updateLocalSettings({ voiceSearchEnabled })}
-            trackColor={{ false: "#C8D0DB", true: "#9AD4D9" }}
-            thumbColor={localUserSettings.voiceSearchEnabled ? "#12616F" : "#F7F9FC"}
-          />
-        </View>
-      </View>
-
-      <View style={styles.settingsPanel}>
-        <Text style={styles.settingsTitle}>Loja</Text>
-        <Text style={styles.settingsText}>Loja ativa: {selectedStoreName}. Escolha a loja predefinida deste telemóvel.</Text>
-        <View style={styles.defaultStoreGrid}>
-          {stores.map((store) => {
-            const isSelected = store.id === selectedDefaultStoreId;
-
-            return (
-              <TouchableOpacity
-                key={store.id}
-                style={[styles.defaultStoreButton, isSelected && styles.defaultStoreButtonActive]}
-                onPress={() => onSelectDefaultStore(store.id)}
-              >
-                <Text style={[styles.defaultStoreButtonText, isSelected && styles.defaultStoreButtonTextActive]}>{store.name}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </View>
-
-      <View style={styles.settingsPanel}>
-        <Text style={styles.settingsTitle}>Sobre esta app</Text>
-        <Text style={styles.settingsText}>
-          Smart Shoppingcart ajuda a preparar a lista familiar, adicionar produtos, organizar o carrinho pela ordem da loja e aprender percursos de supermercado.
-        </Text>
-        <Text style={styles.settingsMeta}>Versão {APP_VERSION} · Canal {UPDATE_CHANNEL}</Text>
-      </View>
     </ScrollView>
   );
 }
@@ -3635,134 +3449,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: 12,
     padding: 12
-  },
-  settingsContent: {
-    gap: 12,
-    paddingBottom: 24
-  },
-  settingsPanel: {
-    backgroundColor: "#FFFFFF",
-    borderColor: "#D8DEE8",
-    borderRadius: 8,
-    borderWidth: 1,
-    gap: 10,
-    padding: 12
-  },
-  settingsTitle: {
-    color: "#18212F",
-    fontSize: 18,
-    fontWeight: "900"
-  },
-  settingsText: {
-    color: "#4B5565",
-    fontSize: 15,
-    lineHeight: 21
-  },
-  settingsInput: {
-    minHeight: 48,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#B8C2D1",
-    color: "#18212F",
-    fontSize: 16,
-    fontWeight: "800",
-    paddingHorizontal: 12
-  },
-  settingsRow: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: 12,
-    justifyContent: "space-between"
-  },
-  settingsRowText: {
-    flex: 1
-  },
-  settingsLabel: {
-    color: "#18212F",
-    fontSize: 16,
-    fontWeight: "900",
-    marginBottom: 2
-  },
-  settingsMeta: {
-    color: "#596579",
-    fontSize: 13,
-    fontWeight: "800"
-  },
-  settingsDisabledAction: {
-    alignItems: "center",
-    backgroundColor: "#EEF2F6",
-    borderRadius: 8,
-    minHeight: 44,
-    justifyContent: "center",
-    paddingHorizontal: 12
-  },
-  settingsDisabledActionText: {
-    color: "#596579",
-    fontSize: 14,
-    fontWeight: "900"
-  },
-  defaultStoreGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8
-  },
-  defaultStoreButton: {
-    alignItems: "center",
-    borderColor: "#B8C2D1",
-    borderRadius: 8,
-    borderWidth: 1,
-    justifyContent: "center",
-    minHeight: 44,
-    paddingHorizontal: 12
-  },
-  defaultStoreButtonActive: {
-    backgroundColor: "#12616F",
-    borderColor: "#12616F"
-  },
-  defaultStoreButtonText: {
-    color: "#18212F",
-    fontSize: 14,
-    fontWeight: "900"
-  },
-  defaultStoreButtonTextActive: {
-    color: "#FFFFFF"
-  },
-  syncPanelHeader: {
-    alignItems: "flex-start",
-    flexDirection: "row",
-    gap: 10
-  },
-  syncPanelText: {
-    flex: 1
-  },
-  syncSpaceRow: {
-    flexDirection: "row",
-    gap: 8
-  },
-  syncSpaceInput: {
-    flex: 1,
-    minHeight: 48,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#B8C2D1",
-    color: "#18212F",
-    fontSize: 16,
-    fontWeight: "800",
-    paddingHorizontal: 12
-  },
-  syncSpaceButton: {
-    alignItems: "center",
-    backgroundColor: "#12616F",
-    borderRadius: 8,
-    justifyContent: "center",
-    minHeight: 48,
-    minWidth: 76,
-    paddingHorizontal: 12
-  },
-  syncSpaceButtonText: {
-    color: "#FFFFFF",
-    fontSize: 15,
-    fontWeight: "900"
   },
   welcomeActions: {
     gap: 10

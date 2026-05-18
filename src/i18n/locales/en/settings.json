@@ -1,1 +1,53 @@
-{}
+{
+  "headerTitle": "Settings",
+  "arranque": {
+    "title": "Startup",
+    "smartStart": {
+      "label": "Skip Welcome",
+      "body": "When enabled, opens List if there are products; if the List is empty, opens Add."
+    }
+  },
+  "user": {
+    "title": "User",
+    "intro": "These preferences stay on this phone.",
+    "namePlaceholder": "Name",
+    "nameLabel": "User name"
+  },
+  "account": {
+    "title": "Account and password",
+    "body": "The app does not have user login yet. To manage passwords safely, the next step is to connect authentication, for example Supabase Auth, and then show change password, sign out, and account recovery here.",
+    "unavailable": "Password management unavailable"
+  },
+  "family": {
+    "title": "Family sharing",
+    "connectedBody": "Using code {{code}}. Every phone with this code shares the same list.",
+    "disconnectedBody": "Configure Supabase to enable sharing between phones. The code is ready for when sync is connected.",
+    "pillSync": "Sync",
+    "pillLocal": "Local",
+    "codePlaceholder": "family-code",
+    "codeLabel": "Family code",
+    "useButton": "Use",
+    "useButtonHint": "Applies this code to family sharing."
+  },
+  "search": {
+    "title": "Search",
+    "voice": {
+      "label": "Voice search",
+      "body": "Shows the microphone in List and Add and uses PT-pt."
+    }
+  },
+  "store": {
+    "title": "Store",
+    "intro": "Active store: {{name}}. Choose this phone's default store.",
+    "selectHint": "Sets as the default store."
+  },
+  "about": {
+    "title": "About this app",
+    "body": "Smart Shoppingcart helps prepare the family list, add products, organize the cart by store order, and learn supermarket routes.",
+    "meta": "Version {{version}} · Channel {{channel}}"
+  },
+  "stub": {
+    "emBreve": "Coming soon.",
+    "emBreveHint": "This section will be filled in a future update."
+  }
+}
