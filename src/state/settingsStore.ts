@@ -1,6 +1,5 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
-import { createAppJsonStorage, readLegacyUserSettings } from "./persistence";
+import { createAppJsonStorage, persist, readLegacyUserSettings } from "./persistence";
 import { defaultStoreId } from "./storesStore";
 import { LocalUserSettings } from "./types";
 
@@ -16,7 +15,7 @@ type SettingsState = LocalUserSettings & {
 };
 
 export const useSettingsStore = create<SettingsState>()(
-  persist(
+  persist<SettingsState>(
     (set) => ({
       ...legacySettings,
       setUserName: (userName) => set({ userName }),

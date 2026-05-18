@@ -15,6 +15,7 @@ import {
   ViewStyle
 } from "react-native";
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from "expo-speech-recognition";
+import { Redirect } from "expo-router";
 import { defaultItinerary, Product, SectionId, sections, starterProducts } from "./src/data/sampleData";
 import { inferSectionRoute, PickEvent, sortByRoute } from "./src/domain/routeInference";
 import { getDeviceLocalStorage, LocalStorageLike } from "./src/lib/deviceStorage";
@@ -215,8 +216,12 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (screen === "welcome") {
+      return;
+    }
+
     writeLocalUserSettings(localUserSettings);
-  }, [localUserSettings]);
+  }, [localUserSettings, screen]);
 
   useEffect(() => {
     const syncClient = supabase;
@@ -868,9 +873,7 @@ export default function App() {
         )}
 
         <View style={styles.contentArea}>
-        {screen === "welcome" && (
-          <WelcomeScreen />
-        )}
+        {screen === "welcome" && <Redirect href="/welcome" />}
 
         {screen === "list" && (
           <ListScreen
@@ -1209,43 +1212,6 @@ function NavigationTabs({
           </TouchableOpacity>
         );
       })}
-    </ScrollView>
-  );
-}
-
-function WelcomeScreen() {
-  return (
-    <ScrollView contentContainerStyle={styles.welcomeContent}>
-      <View style={styles.welcomePanel}>
-        <Text style={styles.welcomeTitle}>Compras sem voltas desnecessarias</Text>
-        <Text style={styles.welcomeText}>
-          A Smart Shoppingcart ajuda a família a manter uma lista partilhada, escolher produtos do catálogo e fazer a compra pela ordem certa da loja.
-        </Text>
-      </View>
-
-      <View style={styles.welcomeSteps}>
-        <View style={styles.welcomeStep}>
-          <Text style={styles.welcomeStepNumber}>1</Text>
-          <View style={styles.welcomeStepText}>
-            <Text style={styles.welcomeStepTitle}>Prepare a Lista</Text>
-            <Text style={styles.welcomeText}>A lista começa vazia. Adicione só o que quer comprar e ajuste quantidades, notas, marcas e alternativas.</Text>
-          </View>
-        </View>
-        <View style={styles.welcomeStep}>
-          <Text style={styles.welcomeStepNumber}>2</Text>
-          <View style={styles.welcomeStepText}>
-            <Text style={styles.welcomeStepTitle}>Use Adicionar</Text>
-            <Text style={styles.welcomeText}>Produtos que ja estao na Lista desaparecem de Adicionar. Pode procurar, filtrar por departamento ou criar um produto novo.</Text>
-          </View>
-        </View>
-        <View style={styles.welcomeStep}>
-          <Text style={styles.welcomeStepNumber}>3</Text>
-          <View style={styles.welcomeStepText}>
-            <Text style={styles.welcomeStepTitle}>Compre no Carrinho</Text>
-            <Text style={styles.welcomeText}>No supermercado, siga a ordem do Carrinho, marque Apanhado em cada produto e use A pagar! para terminar a compra.</Text>
-          </View>
-        </View>
-      </View>
     </ScrollView>
   );
 }
@@ -3661,61 +3627,6 @@ const styles = StyleSheet.create({
   },
   navTabMetaActive: {
     color: "#DFF4F7"
-  },
-  welcomeContent: {
-    gap: 14,
-    paddingBottom: 24
-  },
-  welcomePanel: {
-    borderRadius: 8,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#D8DEE8",
-    padding: 18,
-    gap: 10
-  },
-  welcomeTitle: {
-    color: "#18212F",
-    fontSize: 25,
-    lineHeight: 31,
-    fontWeight: "900"
-  },
-  welcomeText: {
-    color: "#4B5565",
-    fontSize: 16,
-    lineHeight: 23
-  },
-  welcomeSteps: {
-    gap: 10
-  },
-  welcomeStep: {
-    borderRadius: 8,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#D8DEE8",
-    padding: 14,
-    flexDirection: "row",
-    gap: 12
-  },
-  welcomeStepNumber: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    backgroundColor: "#12616F",
-    color: "#FFFFFF",
-    fontSize: 18,
-    fontWeight: "900",
-    textAlign: "center",
-    lineHeight: 36
-  },
-  welcomeStepText: {
-    flex: 1
-  },
-  welcomeStepTitle: {
-    color: "#18212F",
-    fontSize: 17,
-    fontWeight: "900",
-    marginBottom: 4
   },
   syncPanel: {
     backgroundColor: "#FFFFFF",

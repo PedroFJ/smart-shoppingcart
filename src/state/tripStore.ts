@@ -1,6 +1,5 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
-import { createAppJsonStorage, readLegacyAppState, shouldImportLegacyState } from "./persistence";
+import { createAppJsonStorage, persist, readLegacyAppState, shouldImportLegacyState } from "./persistence";
 import { PersistedAppState } from "./types";
 
 const legacyState = shouldImportLegacyState() ? readLegacyAppState() : null;
@@ -19,7 +18,7 @@ type TripState = {
 };
 
 export const useTripStore = create<TripState>()(
-  persist(
+  persist<TripState>(
     (set) => ({
       isCheckoutLocked: legacyState?.isCheckoutLocked ?? false,
       lockedPickingIds: legacyState?.lockedPickingIds ?? [],

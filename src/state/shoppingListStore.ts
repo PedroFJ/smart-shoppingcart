@@ -1,6 +1,5 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
-import { createAppJsonStorage, readLegacyAppState, shouldImportLegacyState } from "./persistence";
+import { createAppJsonStorage, persist, readLegacyAppState, shouldImportLegacyState } from "./persistence";
 import { DepartmentFilter, PersistedAppState, ShoppingItem } from "./types";
 
 const legacyState = shouldImportLegacyState() ? readLegacyAppState() : null;
@@ -22,7 +21,7 @@ type ShoppingListState = {
 };
 
 export const useShoppingListStore = create<ShoppingListState>()(
-  persist(
+  persist<ShoppingListState>(
     (set) => ({
       shoppingItems: legacyState?.shoppingItems ?? [],
       lastChange: null,

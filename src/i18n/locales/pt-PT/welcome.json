@@ -1,1 +1,21 @@
-{}
+{
+  "headline": "Compras sem voltas desnecessarias",
+  "intro": "A Smart Shoppingcart ajuda a família a manter uma lista partilhada, escolher produtos do catálogo e fazer a compra pela ordem certa da loja.",
+  "steps": {
+    "list": {
+      "title": "Prepare a Lista",
+      "body": "A lista começa vazia. Adicione só o que quer comprar e ajuste quantidades, notas, marcas e alternativas."
+    },
+    "add": {
+      "title": "Use Adicionar",
+      "body": "Produtos que ja estao na Lista desaparecem de Adicionar. Pode procurar, filtrar por departamento ou criar um produto novo."
+    },
+    "shop": {
+      "title": "Compre no Carrinho",
+      "body": "No supermercado, siga a ordem do Carrinho, marque Apanhado em cada produto e use A pagar! para terminar a compra."
+    }
+  },
+  "cta": "Começar",
+  "ctaHint": "Abre a lista ativa.",
+  "stepIndicator": "Passo {{current}} de {{total}}"
+}

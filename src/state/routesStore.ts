@@ -1,8 +1,7 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
 import { defaultItinerary, SectionId } from "../data/sampleData";
 import { PickEvent } from "../domain/routeInference";
-import { createAppJsonStorage, readLegacyAppState, shouldImportLegacyState } from "./persistence";
+import { createAppJsonStorage, persist, readLegacyAppState, shouldImportLegacyState } from "./persistence";
 import { PersistedAppState, StoreItineraries } from "./types";
 
 const legacyState = shouldImportLegacyState() ? readLegacyAppState() : null;
@@ -18,7 +17,7 @@ type RoutesState = {
 };
 
 export const useRoutesStore = create<RoutesState>()(
-  persist(
+  persist<RoutesState>(
     (set) => ({
       itinerary: legacyState?.itinerary ?? defaultItinerary,
       storeItineraries: legacyState?.storeItineraries ?? {},

@@ -1,7 +1,6 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
 import { Product, starterProducts } from "../data/sampleData";
-import { createAppJsonStorage, readLegacyAppState, shouldImportLegacyState } from "./persistence";
+import { createAppJsonStorage, persist, readLegacyAppState, shouldImportLegacyState } from "./persistence";
 import { PersistedAppState } from "./types";
 
 const legacyState = shouldImportLegacyState() ? readLegacyAppState() : null;
@@ -15,7 +14,7 @@ type ProductsState = {
 };
 
 export const useProductsStore = create<ProductsState>()(
-  persist(
+  persist<ProductsState>(
     (set) => ({
       products: legacyState?.products ?? starterProducts,
       setProducts: (products) => set({ products }),

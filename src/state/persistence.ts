@@ -1,7 +1,24 @@
-import { StateStorage, createJSONStorage } from "zustand/middleware";
+import type { StateCreator } from "zustand/vanilla";
 import { LocalStorageLike, getDeviceLocalStorage } from "../lib/deviceStorage";
 import { defaultSyncSpaceId } from "../lib/supabase";
 import { LocalUserSettings, PersistedAppState } from "./types";
+
+type StateStorage = {
+  getItem: (name: string) => string | null;
+  setItem: (name: string, value: string) => void;
+  removeItem: (name: string) => void;
+};
+
+type PersistedStorageValue<State> = {
+  state: State;
+  version?: number;
+};
+
+type PersistStorage<State> = {
+  getItem(name: string): PersistedStorageValue<Partial<State>> | null;
+  setItem(name: string, value: PersistedStorageValue<State>): void;
+  removeItem(name: string): void;
+};
 
 export const legacyAppStateStorageKey = "smart-shoppingcart:v1";
 export const legacyUserSettingsStorageKey = "smart-shoppingcart:user-settings:v1";
@@ -11,6 +28,36 @@ export const legacyImportCompleteStorageKey = "smart-shoppingcart:zustand-import
 
 export function createAppJsonStorage() {
   return createJSONStorage(() => appStateStorage);
+}
+
+export function persist<State extends object>(
+  initializer: StateCreator<State, [], []>,
+  options: { name: string; storage?: PersistStorage<State> }
+): StateCreator<State, [], []> {
+  return ((set, get, api) => {
+    const persistState = () => {
+      options.storage?.setItem(options.name, { state: get() });
+    };
+    const setAndPersist = ((...args: unknown[]) => {
+      (set as (...setArgs: unknown[]) => void)(...args);
+      persistState();
+    }) as typeof set;
+    const originalSetState = api.setState;
+
+    if (typeof originalSetState === "function") {
+      api.setState = ((...args: unknown[]) => {
+        (originalSetState as (...setArgs: unknown[]) => void)(...args);
+        persistState();
+      }) as typeof api.setState;
+    }
+
+    const initialState = initializer(setAndPersist, get, api);
+    const storedState = options.storage?.getItem(options.name)?.state;
+
+    return storedState && typeof storedState === "object"
+      ? { ...initialState, ...storedState }
+      : initialState;
+  }) as StateCreator<State, [], []>;
 }
 
 export function readLegacyAppState(): PersistedAppState | null {
@@ -138,3 +185,25 @@ const appStateStorage: StateStorage = {
     getAppStorage()?.removeItem(name);
   }
 };
+
+type GetStorage = () => StateStorage;
+
+function createJSONStorage<State>(getStorage: GetStorage): PersistStorage<State> {
+  return {
+    getItem: (name) => {
+      const rawValue = getStorage().getItem(name);
+
+      if (!rawValue) {
+        return null;
+      }
+
+      return JSON.parse(rawValue) as PersistedStorageValue<Partial<State>>;
+    },
+    setItem: (name, value) => {
+      getStorage().setItem(name, JSON.stringify(value));
+    },
+    removeItem: (name) => {
+      getStorage().removeItem(name);
+    }
+  };
+}

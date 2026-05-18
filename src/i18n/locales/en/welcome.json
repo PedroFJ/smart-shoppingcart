@@ -1,1 +1,21 @@
-{}
+{
+  "headline": "Shopping without unnecessary detours",
+  "intro": "Smart Shoppingcart helps the family keep a shared list, choose products from the catalog, and shop in the right store order.",
+  "steps": {
+    "list": {
+      "title": "Prepare the List",
+      "body": "The list starts empty. Add only what you want to buy and adjust quantities, notes, brands, and alternatives."
+    },
+    "add": {
+      "title": "Use Add",
+      "body": "Products that are already on the List disappear from Add. You can search, filter by department, or create a new product."
+    },
+    "shop": {
+      "title": "Shop in the Cart",
+      "body": "At the supermarket, follow the Cart order, mark each product as picked, and use Checkout! to finish the shop."
+    }
+  },
+  "cta": "Start",
+  "ctaHint": "Opens the active list.",
+  "stepIndicator": "Step {{current}} of {{total}}"
+}

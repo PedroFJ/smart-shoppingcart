@@ -1,7 +1,6 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
 import { defaultItinerary } from "../data/sampleData";
-import { createAppJsonStorage, readLegacyAppState, shouldImportLegacyState } from "./persistence";
+import { createAppJsonStorage, persist, readLegacyAppState, shouldImportLegacyState } from "./persistence";
 import { PersistedAppState, StoreItineraries, StoreProductOrders, StoreStopOrders, SupermarketProfile } from "./types";
 
 export const supermarketProfiles: SupermarketProfile[] = [
@@ -56,7 +55,7 @@ type StoresState = {
 };
 
 export const useStoresStore = create<StoresState>()(
-  persist(
+  persist<StoresState>(
     (set) => ({
       selectedStoreId: legacyState?.selectedStoreId ?? defaultStoreId,
       storeItineraries: legacyState?.storeItineraries ?? defaultStoreItineraries,
