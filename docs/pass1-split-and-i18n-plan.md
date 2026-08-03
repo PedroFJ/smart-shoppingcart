@@ -787,3 +787,42 @@ Next recommended step:
 - Commit 5.6 - in-monolith UX fixes from `docs/commit-5.6-ux-fixes-brief.md`. Do not start Commit 6 until Commit 5.6 lands.
 
 Signed-off-by: Codex <codex@openai.com>
+
+### 2026-08-03 Europe/Lisbon - Codex - Commit 5.6 monolith UX fixes
+
+Status: Commit 5.6 implementation complete in `C:\Users\PedroFreire\dev\smart-shoppingcart`. No screen extraction was done and no new dependencies were added.
+
+Completed:
+
+- Split checkout completion into `endShoppingTrip()` and `finalizeShoppingTrip()` so trips with picked events show Summary before pick events are cleared.
+- Kept learned routes scoped to `storeItineraries[selectedStoreId]`; saving a learned route no longer mutates the legacy `itinerary`.
+- Added Summary save/discard/back actions with `Guardar percurso`, `Terminar sem guardar`, and `Voltar ao carrinho`.
+- Added Summary confidence bands: `Percurso fiável`, `Percurso parcial`, and `Poucos dados`.
+- Added the cart `Falta` action, wired to the undoable `missing` status path.
+- Raised the requested cart/catalog touch targets, including 102 pt pick-row action columns and 44/48 pt minimum action heights.
+- Added inline two-step confirmations for catalog `Apagar` and cart `A pagar!`, with cancel controls and 4-second expiry.
+- Corrected the Portuguese Welcome copy accents in `src/i18n/locales/pt-PT/welcome.json`.
+
+Validation:
+
+- 7.1 Picked trip Summary: seeded web smoke picked three items, checkout required confirmation, Summary appeared, and the confidence band rendered `Poucos dados`.
+- 7.2 Save route: `Guardar percurso` persisted `storeItineraries.lidl` as `pantry,dairy,bakery`; legacy `itinerary` remained `dairy,bakery,pantry`.
+- 7.3 Discard route: `Terminar sem guardar` finalized the trip with route unchanged as `dairy,bakery,pantry` and shopping count `0`.
+- 7.4 No-picks checkout: confirmation timeout was observed, the second confirmation skipped Summary, and the needed item remained in the next list with shopping count `1`.
+- 7.5 Missing item: `Falta` removed the row, undo restored it, and finalizing returned the missing item to the next list as `needed` with shopping count `1`.
+- 7.6 Two-step confirms: web smoke verified catalog `Apagar` requires `Apagar mesmo`, `X` cancels, timeout clears confirmation, final confirm deletes; cart `A pagar!` requires `Terminar compra` and timeout clears confirmation.
+- 7.7 Touch targets at 360 pt viewport: cart `up=48x48`, `down=48x48`, `Apanhado=102x48`, `Falta=102x48`; catalog `Editar=44x44`, `Apagar=44x44`. Screenshot evidence was reused at `dist-router-smoke/commit56-cart-360.png`.
+- 7.8 Welcome copy: direct locale check found `Compras sem voltas desnecessárias` and `Produtos que já estão na Lista desaparecem de Adicionar.`.
+- 7.9 Gates: `npm.cmd run typecheck` passed; `npm.cmd run i18n:check` passed; `npx.cmd expo export --platform web --clear --output-dir dist-router-smoke` passed; seeded Headless Edge smoke passed with `exceptions=0`.
+
+Flags / Roadblocks:
+
+- iOS and Android manual validation were not available in this execution environment.
+- The web smoke server again rewrote Expo's exported script tag to `type="module"` because the real Zustand middleware bundle contains `import.meta`; the standard export command itself passed unchanged.
+- The temporary smoke harness used seeded web storage and DOM-level clicks for compact web confirm controls to avoid headless CDP races inside the 4-second confirmation window. The harness was deleted before commit.
+
+Next recommended step:
+
+- Re-anchor and execute Commit 6 from `docs/commit-6-list-brief.md`; it remains deferred until Commit 5.6 is landed.
+
+Signed-off-by: Codex <codex@openai.com>

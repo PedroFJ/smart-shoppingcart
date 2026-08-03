@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { createElement, type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import {
   Platform,
   SafeAreaView,
@@ -155,6 +155,121 @@ const defaultLocalUserSettings: LocalUserSettings = {
   departmentFilter: "all",
   listSearch: "",
   addSearch: ""
+};
+const checkoutConfirmWebButtonStyle: CSSProperties = {
+  flex: 1,
+  minHeight: 48,
+  borderRadius: 8,
+  borderWidth: 0,
+  borderStyle: "solid",
+  alignItems: "center",
+  justifyContent: "center",
+  backgroundColor: "#A33E22",
+  color: "#FFFFFF",
+  cursor: "pointer",
+  display: "flex",
+  fontFamily: "inherit",
+  padding: "0 10px"
+};
+const checkoutConfirmWebCancelStyle: CSSProperties = {
+  width: 48,
+  minHeight: 48,
+  borderRadius: 8,
+  borderWidth: 1,
+  borderStyle: "solid",
+  borderColor: "#A33E22",
+  alignItems: "center",
+  justifyContent: "center",
+  backgroundColor: "#FFFFFF",
+  color: "#A33E22",
+  cursor: "pointer",
+  display: "flex",
+  fontFamily: "inherit",
+  padding: 0
+};
+const checkoutConfirmWebTextStyle: CSSProperties = {
+  color: "#FFFFFF",
+  fontSize: 13,
+  fontWeight: 700,
+  lineHeight: "16px",
+  pointerEvents: "none",
+  textAlign: "center"
+};
+const checkoutConfirmWebCancelTextStyle: CSSProperties = {
+  color: "#A33E22",
+  fontSize: 16,
+  fontWeight: 700,
+  lineHeight: "20px",
+  pointerEvents: "none"
+};
+const catalogActionWebButtonStyle: CSSProperties = {
+  minHeight: 44,
+  minWidth: 44,
+  alignItems: "center",
+  justifyContent: "center",
+  backgroundColor: "transparent",
+  borderWidth: 0,
+  color: "#A33E22",
+  cursor: "pointer",
+  display: "flex",
+  fontFamily: "inherit",
+  padding: 0
+};
+const catalogActionWebTextStyle: CSSProperties = {
+  color: "#A33E22",
+  fontSize: 12,
+  fontWeight: 700,
+  lineHeight: "16px",
+  pointerEvents: "none"
+};
+const catalogConfirmActionsWebStyle: CSSProperties = {
+  alignItems: "center",
+  display: "flex",
+  flexDirection: "row",
+  gap: 8
+};
+const catalogDeleteConfirmWebButtonStyle: CSSProperties = {
+  minHeight: 44,
+  borderRadius: 8,
+  borderWidth: 0,
+  alignItems: "center",
+  justifyContent: "center",
+  backgroundColor: "#A33E22",
+  color: "#FFFFFF",
+  cursor: "pointer",
+  display: "flex",
+  fontFamily: "inherit",
+  padding: "0 10px"
+};
+const catalogDeleteConfirmWebTextStyle: CSSProperties = {
+  color: "#FFFFFF",
+  fontSize: 12,
+  fontWeight: 700,
+  lineHeight: "16px",
+  pointerEvents: "none"
+};
+const catalogConfirmCancelWebButtonStyle: CSSProperties = {
+  minHeight: 44,
+  minWidth: 44,
+  borderRadius: 8,
+  borderWidth: 1,
+  borderStyle: "solid",
+  borderColor: "#A33E22",
+  alignItems: "center",
+  justifyContent: "center",
+  backgroundColor: "#FFFFFF",
+  color: "#A33E22",
+  cursor: "pointer",
+  display: "flex",
+  fontFamily: "inherit",
+  padding: 0
+};
+const catalogConfirmCancelWebTextStyle: CSSProperties = {
+  color: "#A33E22",
+  fontSize: 14,
+  fontWeight: 700,
+  lineHeight: "18px",
+  pointerEvents: "none"
 };
 
 export default function App() {
@@ -793,10 +908,7 @@ export default function App() {
       ...current,
       [selectedStoreId]: inferredRoute.sectionIds
     }));
-    setItinerary(inferredRoute.sectionIds);
-    setPickEvents([]);
-    setLastChange(null);
-    setScreen("list");
+    finalizeShoppingTrip();
   }
 
   function startShoppingTrip() {
@@ -816,10 +928,21 @@ export default function App() {
   }
 
   function lockCheckoutList() {
-    finishShoppingTrip();
+    endShoppingTrip();
   }
 
-  function finishShoppingTrip() {
+  function endShoppingTrip() {
+    const hasLearnedPicks = pickEvents.some((event) => event.action === "picked");
+
+    if (hasLearnedPicks) {
+      setScreen("summary");
+      return;
+    }
+
+    finalizeShoppingTrip();
+  }
+
+  function finalizeShoppingTrip() {
     const tripItemIds = activeTripItemIds ?? lockedPickingIds;
     setProducts((current) => mergeProductsWithShoppingItems(current, shoppingItems));
     setShoppingItems((current) => buildNextShoppingList(current, tripItemIds));
@@ -908,6 +1031,7 @@ export default function App() {
             onChangeStore={setSelectedStoreId}
             onMoveStoreSection={moveStoreSection}
             onPicked={(productId) => updateItemStatus(productId, "picked")}
+            onMissing={(productId) => updateItemStatus(productId, "missing")}
             onMoveItem={movePickingItem}
             onReorderItem={reorderPickingItem}
             onUndo={undoLastChange}
@@ -924,6 +1048,7 @@ export default function App() {
             confidence={inferredRoute.confidence}
             storeName={selectedStore.name}
             onSave={saveInferredRoute}
+            onDiscard={finalizeShoppingTrip}
             onBack={() => setScreen("shop")}
           />
         )}
@@ -1388,6 +1513,8 @@ function AddScreen({
   const [isNewProductOpen, setIsNewProductOpen] = useState(false);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<Product | null>(null);
+  const [pendingDeleteProductId, setPendingDeleteProductId] = useState<string | null>(null);
+  const deleteConfirmTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const targetSectionId = departmentFilter === "all" ? "pantry" : departmentFilter;
   const availableDepartments = sections.filter((section) => {
     return products.some((product) => product.sectionId === section.id && !listProductIds.has(product.id));
@@ -1404,6 +1531,39 @@ function AddScreen({
     onTranscript: onChangeSearchText
   });
 
+  useEffect(() => {
+    return () => {
+      clearDeleteConfirmTimer();
+    };
+  }, []);
+
+  function clearDeleteConfirmTimer() {
+    if (deleteConfirmTimeout.current) {
+      clearTimeout(deleteConfirmTimeout.current);
+      deleteConfirmTimeout.current = null;
+    }
+  }
+
+  function cancelDeleteConfirm() {
+    clearDeleteConfirmTimer();
+    setPendingDeleteProductId(null);
+  }
+
+  function requestDeleteConfirm(productId: string) {
+    clearDeleteConfirmTimer();
+    setPendingDeleteProductId(productId);
+    deleteConfirmTimeout.current = setTimeout(() => {
+      setPendingDeleteProductId(null);
+      deleteConfirmTimeout.current = null;
+    }, 4000);
+  }
+
+  function confirmDeleteProduct(productId: string) {
+    clearDeleteConfirmTimer();
+    setPendingDeleteProductId(null);
+    onDeleteProduct(productId);
+  }
+
   function handleCreateProduct() {
     onCreateProduct({
       rawName: newProductName,
@@ -1418,6 +1578,7 @@ function AddScreen({
   }
 
   function beginEditProduct(product: Product) {
+    cancelDeleteConfirm();
     setEditingProductId(product.id);
     setEditDraft({ ...product });
   }
@@ -1451,6 +1612,64 @@ function AddScreen({
   function cancelEditProduct() {
     setEditingProductId(null);
     setEditDraft(null);
+  }
+
+  function renderCatalogDeleteAction(product: Product) {
+    if (pendingDeleteProductId === product.id) {
+      if (Platform.OS === "web") {
+        return createElement(
+          "div",
+          { style: catalogConfirmActionsWebStyle },
+          createElement(
+            "button",
+            {
+              type: "button",
+              onClick: () => confirmDeleteProduct(product.id),
+              style: catalogDeleteConfirmWebButtonStyle
+            },
+            createElement("span", { style: catalogDeleteConfirmWebTextStyle }, "Apagar mesmo")
+          ),
+          createElement(
+            "button",
+            {
+              type: "button",
+              onClick: cancelDeleteConfirm,
+              style: catalogConfirmCancelWebButtonStyle
+            },
+            createElement("span", { style: catalogConfirmCancelWebTextStyle }, "X")
+          )
+        );
+      }
+
+      return (
+        <View style={styles.catalogConfirmActions}>
+          <TouchableOpacity style={styles.catalogDeleteConfirmButton} onPress={() => confirmDeleteProduct(product.id)}>
+            <Text style={styles.catalogDeleteConfirmText}>Apagar mesmo</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.catalogConfirmCancelButton} onPress={cancelDeleteConfirm}>
+            <Text style={styles.catalogConfirmCancelText}>X</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    if (Platform.OS === "web") {
+      return createElement(
+        "button",
+        {
+          type: "button",
+          onClick: () => requestDeleteConfirm(product.id),
+          style: catalogActionWebButtonStyle
+        },
+        createElement("span", { style: catalogActionWebTextStyle }, "Apagar")
+      );
+    }
+
+    return (
+      <TouchableOpacity style={styles.catalogSmallAction} onPress={() => requestDeleteConfirm(product.id)}>
+        <Text style={styles.deleteButtonText}>Apagar</Text>
+      </TouchableOpacity>
+    );
   }
 
   return (
@@ -1635,9 +1854,7 @@ function AddScreen({
                   <TouchableOpacity style={styles.catalogSmallAction} onPress={() => beginEditProduct(product)}>
                     <Text style={styles.manageButtonText}>Editar</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.catalogSmallAction} onPress={() => onDeleteProduct(product.id)}>
-                    <Text style={styles.deleteButtonText}>Apagar</Text>
-                  </TouchableOpacity>
+                  {renderCatalogDeleteAction(product)}
                 </View>
               </View>
             </View>
@@ -1662,6 +1879,7 @@ function ShopScreen({
   onChangeStore,
   onMoveStoreSection,
   onPicked,
+  onMissing,
   onMoveItem,
   onReorderItem,
   onUndo,
@@ -1678,6 +1896,7 @@ function ShopScreen({
   onChangeStore: (storeId: string) => void;
   onMoveStoreSection: (routeItemId: string, direction: "up" | "down") => void;
   onPicked: (productId: string) => void;
+  onMissing: (productId: string) => void;
   onMoveItem: (productId: string, direction: "up" | "down", visibleItemIds: string[]) => void;
   onReorderItem: (productId: string, targetVisibleIndex: number, visibleItemIds: string[]) => void;
   onUndo: () => void;
@@ -1691,8 +1910,12 @@ function ShopScreen({
   const [hoveredDragProductId, setHoveredDragProductId] = useState<string | null>(null);
   const [dragOffsetY, setDragOffsetY] = useState(0);
   const [isRouteEditorOpen, setIsRouteEditorOpen] = useState(false);
+  const [isCheckoutConfirming, setIsCheckoutConfirming] = useState(false);
   const dragStartPageY = useRef(0);
   const dragVisibleItemIdsRef = useRef(visibleItemIds);
+  const checkoutConfirmTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const checkoutConfirmed = useRef(false);
+  const checkoutConfirmRequestId = useRef(0);
   const routeEditorItems = getRouteEditorItems(selectedStoreId, storeRoute, storeStopOrder);
   const dragSourceIndex = draggingProductId ? visibleItemIds.indexOf(draggingProductId) : -1;
   const dragTargetIndex = dragSourceIndex >= 0
@@ -1704,6 +1927,137 @@ function ShopScreen({
       dragVisibleItemIdsRef.current = visibleItemIds;
     }
   }, [draggingProductId, visibleItemIds]);
+
+  useEffect(() => {
+    if (!isCheckoutConfirming) {
+      return;
+    }
+
+    const requestId = checkoutConfirmRequestId.current;
+    checkoutConfirmTimeout.current = setTimeout(() => {
+      if (checkoutConfirmRequestId.current !== requestId) {
+        return;
+      }
+
+      checkoutConfirmed.current = false;
+      setIsCheckoutConfirming(false);
+      checkoutConfirmTimeout.current = null;
+    }, 4000);
+
+    return () => {
+      clearCheckoutConfirmTimer();
+    };
+  }, [isCheckoutConfirming]);
+
+  useEffect(() => {
+    return () => {
+      clearCheckoutConfirmTimer();
+    };
+  }, []);
+
+  function clearCheckoutConfirmTimer() {
+    if (checkoutConfirmTimeout.current) {
+      clearTimeout(checkoutConfirmTimeout.current);
+      checkoutConfirmTimeout.current = null;
+    }
+  }
+
+  function cancelCheckoutConfirm() {
+    checkoutConfirmRequestId.current += 1;
+    clearCheckoutConfirmTimer();
+    checkoutConfirmed.current = false;
+    setIsCheckoutConfirming(false);
+  }
+
+  function requestCheckoutConfirm() {
+    clearCheckoutConfirmTimer();
+    checkoutConfirmRequestId.current += 1;
+    checkoutConfirmed.current = false;
+    setIsCheckoutConfirming(true);
+  }
+
+  function confirmCheckout() {
+    if (checkoutConfirmed.current) {
+      return;
+    }
+
+    checkoutConfirmed.current = true;
+    checkoutConfirmRequestId.current += 1;
+    clearCheckoutConfirmTimer();
+    setIsCheckoutConfirming(false);
+    onLockCheckout();
+  }
+
+  function renderCheckoutConfirmButton() {
+    if (Platform.OS === "web") {
+      return createElement(
+        "button",
+        {
+          type: "button",
+          onClick: confirmCheckout,
+          onMouseDown: confirmCheckout,
+          style: checkoutConfirmWebButtonStyle
+        },
+        createElement("span", { style: checkoutConfirmWebTextStyle }, "Terminar compra")
+      );
+    }
+
+    return (
+      <TouchableOpacity
+        style={styles.checkoutButtonCompact}
+        onPress={confirmCheckout}
+        onPressIn={confirmCheckout}
+      >
+        <Text pointerEvents="none" style={styles.checkoutConfirmText}>Terminar compra</Text>
+      </TouchableOpacity>
+    );
+  }
+
+  function renderCheckoutCancelButton() {
+    if (Platform.OS === "web") {
+      return createElement(
+        "button",
+        {
+          type: "button",
+          onClick: cancelCheckoutConfirm,
+          style: checkoutConfirmWebCancelStyle
+        },
+        createElement("span", { style: checkoutConfirmWebCancelTextStyle }, "X")
+      );
+    }
+
+    return (
+      <TouchableOpacity style={styles.confirmCancelButton} onPress={cancelCheckoutConfirm}>
+        <Text style={styles.confirmCancelText}>X</Text>
+      </TouchableOpacity>
+    );
+  }
+
+  function renderCartTopActions() {
+    if (isCheckoutConfirming) {
+      return (
+        <View style={styles.cartTopActions}>
+          {renderCheckoutConfirmButton()}
+          {renderCheckoutCancelButton()}
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.cartTopActions}>
+        <TouchableOpacity
+          disabled={!canUndo}
+          style={[styles.undoButtonCompact, !canUndo && styles.smallActionDisabled]}
+          onPress={onUndo}
+        >
+          <Text style={[styles.undoButtonText, !canUndo && styles.smallActionTextDisabled]}>Desfazer última ação</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.checkoutButtonCompact} onPress={requestCheckoutConfirm}>
+          <Text style={styles.checkoutButtonText}>A pagar!</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   function finishDragging(productId: string, offsetY: number) {
     const dragVisibleItemIds = dragVisibleItemIdsRef.current;
@@ -1794,18 +2148,7 @@ function ShopScreen({
     return (
       <View style={styles.screen}>
         {storeSelector}
-        <View style={styles.cartTopActions}>
-          <TouchableOpacity
-            disabled={!canUndo}
-            style={[styles.undoButtonCompact, !canUndo && styles.smallActionDisabled]}
-            onPress={onUndo}
-          >
-            <Text style={[styles.undoButtonText, !canUndo && styles.smallActionTextDisabled]}>Desfazer última ação</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.checkoutButtonCompact} onPress={onLockCheckout}>
-            <Text style={styles.checkoutButtonText}>A pagar!</Text>
-          </TouchableOpacity>
-        </View>
+        {renderCartTopActions()}
         <Text style={styles.title}>Compras terminadas</Text>
         <Text style={styles.emptyText}>
           {isCheckoutLocked
@@ -1820,18 +2163,7 @@ function ShopScreen({
     <View style={styles.screen}>
       {storeSelector}
 
-      <View style={styles.cartTopActions}>
-        <TouchableOpacity
-          disabled={!canUndo}
-          style={[styles.undoButtonCompact, !canUndo && styles.smallActionDisabled]}
-          onPress={onUndo}
-        >
-          <Text style={[styles.undoButtonText, !canUndo && styles.smallActionTextDisabled]}>Desfazer última ação</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.checkoutButtonCompact} onPress={onLockCheckout}>
-          <Text style={styles.checkoutButtonText}>A pagar!</Text>
-        </TouchableOpacity>
-      </View>
+      {renderCartTopActions()}
 
       <Text style={styles.cartListTitle}>Produtos por ordem da loja</Text>
 
@@ -1890,14 +2222,14 @@ function ShopScreen({
               <View style={styles.pickArrowRow}>
                 <TouchableOpacity
                   disabled={index === 0}
-                  style={[styles.sortButton, styles.cartSortButton, index === 0 && styles.sortButtonDisabled]}
+                  style={[styles.sortButton, index === 0 && styles.sortButtonDisabled]}
                   onPress={() => onMoveItem(item.id, "up", visibleItemIds)}
                 >
                   <Text style={[styles.sortButtonText, index === 0 && styles.sortButtonTextDisabled]}>↑</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   disabled={index === items.length - 1}
-                  style={[styles.sortButton, styles.cartSortButton, index === items.length - 1 && styles.sortButtonDisabled]}
+                  style={[styles.sortButton, index === items.length - 1 && styles.sortButtonDisabled]}
                   onPress={() => onMoveItem(item.id, "down", visibleItemIds)}
                 >
                   <Text style={[styles.sortButtonText, index === items.length - 1 && styles.sortButtonTextDisabled]}>↓</Text>
@@ -1905,6 +2237,9 @@ function ShopScreen({
               </View>
               <TouchableOpacity style={styles.pickedSmallButton} onPress={() => onPicked(item.id)}>
                 <Text style={styles.pickedSmallButtonText}>Apanhado</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.missingSmallButton} onPress={() => onMissing(item.id)}>
+                <Text style={styles.missingSmallButtonText}>Falta</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1919,19 +2254,31 @@ function SummaryScreen({
   confidence,
   storeName,
   onSave,
+  onDiscard,
   onBack
 }: {
   route: SectionId[];
   confidence: number;
   storeName: string;
   onSave: () => void;
+  onDiscard: () => void;
   onBack: () => void;
 }) {
+  const confidenceBand = getConfidenceBand(confidence);
+
   return (
     <View style={styles.screen}>
       <Text style={styles.title}>Percurso aprendido</Text>
       <Text style={styles.emptyText}>Supermercado: {storeName}</Text>
-      <Text style={styles.emptyText}>Confiança {Math.round(confidence * 100)}%</Text>
+      <Text
+        style={[
+          styles.preferencePill,
+          styles.summaryConfidencePill,
+          { backgroundColor: confidenceBand.backgroundColor, color: confidenceBand.color }
+        ]}
+      >
+        {confidenceBand.label} - Confiança {Math.round(confidence * 100)}%
+      </Text>
       <ScrollView contentContainerStyle={styles.listContent}>
         {route.map((sectionId, index) => (
           <View key={sectionId} style={styles.routeRow}>
@@ -1940,14 +2287,31 @@ function SummaryScreen({
           </View>
         ))}
       </ScrollView>
-      <TouchableOpacity style={styles.primaryButtonFull} onPress={onSave}>
-        <Text style={styles.primaryButtonText}>Guardar percurso</Text>
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.secondaryButtonFull} onPress={onBack}>
-        <Text style={styles.secondaryButtonText}>Voltar</Text>
-      </TouchableOpacity>
+      <View style={styles.summaryActions}>
+        <TouchableOpacity style={styles.primaryButtonFull} onPress={onSave}>
+          <Text style={styles.primaryButtonText}>Guardar percurso</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.secondaryButtonFull} onPress={onDiscard}>
+          <Text style={styles.secondaryButtonText}>Terminar sem guardar</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.tertiaryButtonFull} onPress={onBack}>
+          <Text style={styles.tertiaryButtonText}>Voltar ao carrinho</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
+}
+
+function getConfidenceBand(confidence: number): { label: string; color: string; backgroundColor: string } {
+  if (confidence >= 0.6) {
+    return { label: "Percurso fiável", color: "#1F7A4C", backgroundColor: "#E8F5EE" };
+  }
+
+  if (confidence >= 0.3) {
+    return { label: "Percurso parcial", color: "#8A5A00", backgroundColor: "#FFF4E0" };
+  }
+
+  return { label: "Poucos dados", color: "#A33E22", backgroundColor: "#FDECE8" };
 }
 
 function withStatus(product: Product): ShoppingItem {
@@ -3809,6 +4173,18 @@ const styles = StyleSheet.create({
   secondaryButtonTextDisabled: {
     color: "#8A95A6"
   },
+  tertiaryButtonFull: {
+    minHeight: 52,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 8,
+    marginTop: 10
+  },
+  tertiaryButtonText: {
+    color: "#596579",
+    fontSize: 16,
+    fontWeight: "800"
+  },
   listContent: {
     gap: 10,
     paddingBottom: 24
@@ -3861,7 +4237,7 @@ const styles = StyleSheet.create({
     justifyContent: "center"
   },
   inlineSkipButton: {
-    minHeight: 36,
+    minHeight: 44,
     minWidth: 56,
     alignItems: "flex-end",
     justifyContent: "center"
@@ -3869,7 +4245,7 @@ const styles = StyleSheet.create({
   listPostponeAction: {
     alignItems: "flex-end",
     justifyContent: "center",
-    minHeight: 36,
+    minHeight: 44,
     paddingLeft: 12
   },
   quantityColumn: {
@@ -3892,8 +4268,8 @@ const styles = StyleSheet.create({
     justifyContent: "space-between"
   },
   sortButton: {
-    width: 32,
-    minHeight: 34,
+    width: 48,
+    minHeight: 48,
     borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
@@ -3995,8 +4371,42 @@ const styles = StyleSheet.create({
     gap: 14
   },
   catalogSmallAction: {
-    minHeight: 32,
+    minHeight: 44,
+    minWidth: 44,
     justifyContent: "center"
+  },
+  catalogConfirmActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8
+  },
+  catalogDeleteConfirmButton: {
+    minHeight: 44,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#A33E22",
+    paddingHorizontal: 10
+  },
+  catalogDeleteConfirmText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  catalogConfirmCancelButton: {
+    minHeight: 44,
+    minWidth: 44,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#A33E22",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFFFFF"
+  },
+  catalogConfirmCancelText: {
+    color: "#A33E22",
+    fontSize: 14,
+    fontWeight: "900"
   },
   grid: {
     flexDirection: "row",
@@ -4190,6 +4600,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4
   },
+  summaryConfidencePill: {
+    marginTop: 10
+  },
+  summaryActions: {
+    gap: 0
+  },
   preferenceOpen: {
     backgroundColor: "#E6F4EA",
     color: "#245A38"
@@ -4241,7 +4657,8 @@ const styles = StyleSheet.create({
     gap: 10,
     marginTop: 10,
     marginBottom: 12,
-    zIndex: 2
+    position: "relative",
+    zIndex: 20
   },
   checkoutButtonCompact: {
     flex: 1,
@@ -4252,10 +4669,32 @@ const styles = StyleSheet.create({
     backgroundColor: "#A33E22",
     paddingHorizontal: 10
   },
+  confirmCancelButton: {
+    width: 48,
+    minHeight: 48,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#A33E22",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFFFFF"
+  },
+  confirmCancelText: {
+    color: "#A33E22",
+    fontSize: 16,
+    fontWeight: "900"
+  },
   checkoutButtonText: {
     color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "900"
+  },
+  checkoutConfirmText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "900",
+    lineHeight: 16,
+    textAlign: "center"
   },
   checkoutLockedBox: {
     minHeight: 54,
@@ -4392,20 +4831,17 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
     gap: 6,
     justifyContent: "flex-end",
-    width: 86
+    width: 102
   },
   pickArrowRow: {
     flexDirection: "row",
     gap: 6,
     justifyContent: "flex-end",
-    width: 86
-  },
-  cartSortButton: {
-    width: 40
+    width: 102
   },
   pickedSmallButton: {
-    minHeight: 46,
-    width: 86,
+    minHeight: 48,
+    width: 102,
     borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
@@ -4414,6 +4850,22 @@ const styles = StyleSheet.create({
   },
   pickedSmallButtonText: {
     color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "900"
+  },
+  missingSmallButton: {
+    minHeight: 48,
+    width: 102,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#A33E22",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 6
+  },
+  missingSmallButtonText: {
+    color: "#A33E22",
     fontSize: 13,
     fontWeight: "900"
   },

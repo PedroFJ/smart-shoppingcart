@@ -1,5 +1,5 @@
 {
-  "headline": "Compras sem voltas desnecessarias",
+  "headline": "Compras sem voltas desnecessárias",
   "intro": "A Smart Shoppingcart ajuda a família a manter uma lista partilhada, escolher produtos do catálogo e fazer a compra pela ordem certa da loja.",
   "steps": {
     "list": {
@@ -8,7 +8,7 @@
     },
     "add": {
       "title": "Use Adicionar",
-      "body": "Produtos que ja estao na Lista desaparecem de Adicionar. Pode procurar, filtrar por departamento ou criar um produto novo."
+      "body": "Produtos que já estão na Lista desaparecem de Adicionar. Pode procurar, filtrar por departamento ou criar um produto novo."
     },
     "shop": {
       "title": "Compre no Carrinho",
