@@ -1,63 +1,23 @@
-import type { StateCreator } from "zustand/vanilla";
+import { StateStorage, createJSONStorage, persist } from "zustand/middleware";
+import { sections } from "../data/sampleData";
+import { isSavedAtNewer } from "../domain/savedAt";
 import { LocalStorageLike, getDeviceLocalStorage } from "../lib/deviceStorage";
 import { defaultSyncSpaceId } from "../lib/supabase";
-import { LocalUserSettings, PersistedAppState } from "./types";
+import { DepartmentFilter, LocalUserSettings, PersistedAppState } from "./types";
 
-type StateStorage = {
-  getItem: (name: string) => string | null;
-  setItem: (name: string, value: string) => void;
-  removeItem: (name: string) => void;
-};
-
-type PersistedStorageValue<State> = {
-  state: State;
-  version?: number;
-};
-
-type PersistStorage<State> = {
-  getItem(name: string): PersistedStorageValue<Partial<State>> | null;
-  setItem(name: string, value: PersistedStorageValue<State>): void;
-  removeItem(name: string): void;
-};
+export { persist };
 
 export const legacyAppStateStorageKey = "smart-shoppingcart:v1";
 export const legacyUserSettingsStorageKey = "smart-shoppingcart:user-settings:v1";
 export const syncClientIdStorageKey = "smart-shoppingcart:sync-client-id";
 export const syncSpaceIdStorageKey = "smart-shoppingcart:sync-space-id";
 export const legacyImportCompleteStorageKey = "smart-shoppingcart:zustand-import-complete:v1";
+export const legacyImportWatermarkStorageKey = "smart-shoppingcart:legacy-import-watermark:v1";
 
-export function createAppJsonStorage() {
-  return createJSONStorage(() => appStateStorage);
-}
+const sectionIds = new Set<string>(sections.map((section) => section.id));
 
-export function persist<State extends object>(
-  initializer: StateCreator<State, [], []>,
-  options: { name: string; storage?: PersistStorage<State> }
-): StateCreator<State, [], []> {
-  return ((set, get, api) => {
-    const persistState = () => {
-      options.storage?.setItem(options.name, { state: get() });
-    };
-    const setAndPersist = ((...args: unknown[]) => {
-      (set as (...setArgs: unknown[]) => void)(...args);
-      persistState();
-    }) as typeof set;
-    const originalSetState = api.setState;
-
-    if (typeof originalSetState === "function") {
-      api.setState = ((...args: unknown[]) => {
-        (originalSetState as (...setArgs: unknown[]) => void)(...args);
-        persistState();
-      }) as typeof api.setState;
-    }
-
-    const initialState = initializer(setAndPersist, get, api);
-    const storedState = options.storage?.getItem(options.name)?.state;
-
-    return storedState && typeof storedState === "object"
-      ? { ...initialState, ...storedState }
-      : initialState;
-  }) as StateCreator<State, [], []>;
+export function createAppJsonStorage<State>() {
+  return createJSONStorage<State>(() => appStateStorage);
 }
 
 export function readLegacyAppState(): PersistedAppState | null {
@@ -81,7 +41,10 @@ export function readLegacyUserSettings(defaultStoreId: string): LocalUserSetting
     voiceSearchEnabled: true,
     defaultStoreId,
     smartStartEnabled: false,
-    locale: "pt-PT"
+    locale: "pt-PT",
+    listSearch: "",
+    addSearch: "",
+    departmentFilter: "all"
   };
   const storage = getAppStorage();
   const rawSettings = storage?.getItem(legacyUserSettingsStorageKey);
@@ -104,18 +67,43 @@ export function readLegacyUserSettings(defaultStoreId: string): LocalUserSetting
       smartStartEnabled: typeof parsedSettings.smartStartEnabled === "boolean"
         ? parsedSettings.smartStartEnabled
         : fallbackSettings.smartStartEnabled,
-      locale: typeof parsedSettings.locale === "string" ? parsedSettings.locale : fallbackSettings.locale
+      locale: typeof parsedSettings.locale === "string" ? parsedSettings.locale : fallbackSettings.locale,
+      listSearch: typeof parsedSettings.listSearch === "string" ? parsedSettings.listSearch : fallbackSettings.listSearch,
+      addSearch: typeof parsedSettings.addSearch === "string" ? parsedSettings.addSearch : fallbackSettings.addSearch,
+      departmentFilter: isDepartmentFilter(parsedSettings.departmentFilter)
+        ? parsedSettings.departmentFilter
+        : fallbackSettings.departmentFilter
     };
   } catch {
     return fallbackSettings;
   }
 }
 
-export function shouldImportLegacyState(): boolean {
-  return getAppStorage()?.getItem(legacyImportCompleteStorageKey) !== "true";
+export function isLegacyCutoverComplete(): boolean {
+  return getAppStorage()?.getItem(legacyImportCompleteStorageKey) === "true";
 }
 
-export function markLegacyStateImported(): void {
+export function readLegacyImportWatermark(): string {
+  return getAppStorage()?.getItem(legacyImportWatermarkStorageKey) ?? "";
+}
+
+export function shouldImportLegacyState(legacySavedAt?: string): boolean {
+  if (isLegacyCutoverComplete()) {
+    return false;
+  }
+
+  if (!legacySavedAt) {
+    return false;
+  }
+
+  return isSavedAtNewer(legacySavedAt, readLegacyImportWatermark());
+}
+
+export function markLegacyStateImported(savedAt: string): void {
+  getAppStorage()?.setItem(legacyImportWatermarkStorageKey, savedAt);
+}
+
+export function markLegacyCutoverComplete(): void {
   getAppStorage()?.setItem(legacyImportCompleteStorageKey, "true");
 }
 
@@ -159,6 +147,10 @@ function createSyncClientId(): string {
   return `client-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+function isDepartmentFilter(value: unknown): value is DepartmentFilter {
+  return value === "all" || (typeof value === "string" && sectionIds.has(value));
+}
+
 function getAppStorage(): LocalStorageLike | null {
   const browserStorage = typeof globalThis !== "undefined" && "localStorage" in globalThis
     ? globalThis.localStorage
@@ -176,6 +168,9 @@ function getAppStorage(): LocalStorageLike | null {
   return getDeviceLocalStorage();
 }
 
+// Must stay synchronous until Commit 11. bootstrapLegacyState() in app/_layout.tsx
+// assumes persist() has already rehydrated by the time it runs; an async adapter
+// breaks that ordering silently, with no typecheck error.
 const appStateStorage: StateStorage = {
   getItem: (name) => getAppStorage()?.getItem(name) ?? null,
   setItem: (name, value) => {
@@ -185,25 +180,3 @@ const appStateStorage: StateStorage = {
     getAppStorage()?.removeItem(name);
   }
 };
-
-type GetStorage = () => StateStorage;
-
-function createJSONStorage<State>(getStorage: GetStorage): PersistStorage<State> {
-  return {
-    getItem: (name) => {
-      const rawValue = getStorage().getItem(name);
-
-      if (!rawValue) {
-        return null;
-      }
-
-      return JSON.parse(rawValue) as PersistedStorageValue<Partial<State>>;
-    },
-    setItem: (name, value) => {
-      getStorage().setItem(name, JSON.stringify(value));
-    },
-    removeItem: (name) => {
-      getStorage().removeItem(name);
-    }
-  };
-}

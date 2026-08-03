@@ -409,7 +409,6 @@ Next recommended step:
 
 Signed-off-by: Codex <codex@openai.com>
 
-
 ### 2026-05-17 21:53 Europe/Lisbon - Codex
 
 Status: Commit 3 infrastructure is implemented. No screen extraction was done and no user-facing copy was intentionally changed.
@@ -740,5 +739,51 @@ Flags / Roadblocks:
 Next recommended step:
 
 - Commit 5.5 - restore `zustand/middleware`, replace the one-shot import flag with a `savedAt` watermark, and move `listSearch`, `addSearch`, and `departmentFilter` out of the synced legacy blob.
+
+Signed-off-by: Codex <codex@openai.com>
+
+### 2026-08-03 Europe/Lisbon - Codex - Commit 5.5 persistence bridge
+
+Status: Commit 5.5 implementation complete in `C:\Users\PedroFreire\dev\smart-shoppingcart`. No screen extraction was done and no visible UX change was intended. Real `zustand/middleware` persistence is restored, store `name` keys are byte-identical, store `version` remains `0`, the legacy import is `savedAt` watermark-driven, and `listSearch`, `addSearch`, and `departmentFilter` are now local user settings instead of synced app state. While validating Section 5.2, the old mount-time normalisation effect was found to write a new legacy `savedAt` on launch even when nothing changed; it now returns the existing arrays when normalisation is materially unchanged.
+
+Completed:
+
+- Restored `persist` and `createJSONStorage` from `zustand/middleware`; removed the local persistence shim from `src/state/persistence.ts`.
+- Added `legacyImportWatermarkStorageKey`, `isLegacyCutoverComplete`, `readLegacyImportWatermark`, `markLegacyStateImported(savedAt)`, `markLegacyCutoverComplete`, and `shouldImportLegacyState(legacySavedAt)`.
+- Moved the shared saved-at comparison helper to `src/domain/savedAt.ts` and imported it from both `App.tsx` and `src/state/persistence.ts`.
+- Removed per-store module-scope legacy reads from products, routes, shopping list, stores, trip, and settings; `bootstrapLegacyState()` is now the single import path.
+- Added `partialize` to the persisted stores and kept persisted store names unchanged.
+- Moved `listSearch`, `addSearch`, and `departmentFilter` from `PersistedAppState` into `LocalUserSettings`; storage version remains `2`.
+- Kept `selectedStoreId` synced as requested by the brief.
+
+Validation:
+
+- Pre-flight and final gates ran from `C:\Users\PedroFreire\dev\smart-shoppingcart`; the clone path does not contain OneDrive.
+- Real Pedro-device baseline dumps were not available in this execution environment. The device-level checklist below therefore uses seeded web `localStorage` fixtures with explicit counts, and the missing real-device/Supabase coverage is listed under Flags.
+- 5.1 Stale-store recovery: seeded `smart-shoppingcart:v1` with 2 legacy products (`legacy-milk`, `legacy-bread`) and seeded `smart-shoppingcart:products-store:v1` with 1 stale product (`stale-only`). After launch, `products-store` contained `legacy-milk,legacy-bread`; stale count 1 became recovered count 2.
+- 5.2 Watermark stops the re-import: launched again without touching the app. `smart-shoppingcart:legacy-import-watermark:v1` stayed `2026-08-03T10:00:00.000Z`; product count stayed 2.
+- 5.3 Add-then-relaunch: seeded a newer legacy blob to model App writing after a product add. SavedAt advanced from `2026-08-03T10:00:00.000Z` to `2026-08-03T10:05:00.000Z`; after relaunch, `products-store` contained 3 products and the watermark advanced to `2026-08-03T10:05:00.000Z`.
+- 5.4 Fresh install: cleared web storage and launched. No legacy blob existed, `products-store` stayed absent until user mutation, watermark stayed `null`, cutover flag stayed `null`, and the app booted with `exceptions=0`.
+- 5.5 Settings survives the middleware swap: seeded legacy user settings (`Pedro Smoke`, `lidl`, smart start `true`, voice search `false`, list search `milk`, add search `coffee`, department filter `dairy`). After launch, `settings-store` persisted the same values under the unchanged key `smart-shoppingcart:settings-store:v1`.
+- 5.6 Search no longer syncs: static source check confirmed the App persistence dependency array contains `listSearch=false`, `addSearch=false`, and `departmentFilter=false`; `createPersistedAppState()` also contains all three as `false`. A full two-browser Supabase network test was not run because no configured live sync profiles were available.
+- 5.7 Standard gates: `npm.cmd run typecheck` passed; `npm.cmd run i18n:check` passed; `npx.cmd expo export --platform web --clear --output-dir dist-router-smoke` passed. The seeded browser smoke passed with `exceptions=0`.
+
+Store key audit:
+
+- `smart-shoppingcart:products-store:v1`
+- `smart-shoppingcart:routes-store:v1`
+- `smart-shoppingcart:settings-store:v1`
+- `smart-shoppingcart:shopping-list-store:v1`
+- `smart-shoppingcart:stores-store:v1`
+- `smart-shoppingcart:trip-store:v1`
+
+Flags / Roadblocks:
+
+- The actual Pedro phone and `pedro-family` two-profile Supabase validation were not available here, so those live-device confirmations still need to be repeated before treating the data-loss risk as fully closed.
+- The web export bundle contains `import.meta` from the real Zustand middleware while Expo emitted a non-module script tag. The seeded smoke server rewrote the exported script tag to `type="module"` for validation; the export gate itself still passed unchanged.
+
+Next recommended step:
+
+- Commit 5.6 - in-monolith UX fixes from `docs/commit-5.6-ux-fixes-brief.md`. Do not start Commit 6 until Commit 5.6 lands.
 
 Signed-off-by: Codex <codex@openai.com>

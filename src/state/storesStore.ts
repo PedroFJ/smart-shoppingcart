@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { defaultItinerary } from "../data/sampleData";
-import { createAppJsonStorage, persist, readLegacyAppState, shouldImportLegacyState } from "./persistence";
+import { createAppJsonStorage, persist } from "./persistence";
 import { PersistedAppState, StoreItineraries, StoreProductOrders, StoreStopOrders, SupermarketProfile } from "./types";
 
 export const supermarketProfiles: SupermarketProfile[] = [
@@ -36,7 +36,6 @@ export const defaultSupercorStopOrder = [
   "pao"
 ];
 
-const legacyState = shouldImportLegacyState() ? readLegacyAppState() : null;
 const defaultStoreItineraries = supermarketProfiles.reduce<StoreItineraries>((itineraries, store) => {
   itineraries[store.id] = defaultItinerary;
   return itineraries;
@@ -56,13 +55,13 @@ type StoresState = {
 };
 
 export const useStoresStore = create<StoresState>()(
-  persist<StoresState>(
+  persist(
     (set) => ({
       supermarketProfiles,
-      selectedStoreId: legacyState?.selectedStoreId ?? defaultStoreId,
-      storeItineraries: legacyState?.storeItineraries ?? defaultStoreItineraries,
-      storeStopOrders: legacyState?.storeStopOrders ?? { supercor: defaultSupercorStopOrder },
-      storeProductOrders: legacyState?.storeProductOrders ?? {},
+      selectedStoreId: defaultStoreId,
+      storeItineraries: defaultStoreItineraries,
+      storeStopOrders: { supercor: defaultSupercorStopOrder },
+      storeProductOrders: {},
       selectStore: (selectedStoreId) => set({ selectedStoreId }),
       setStoreItineraries: (storeItineraries) => set({ storeItineraries }),
       setStoreStopOrders: (storeStopOrders) => set({ storeStopOrders }),
@@ -82,7 +81,14 @@ export const useStoresStore = create<StoresState>()(
     }),
     {
       name: "smart-shoppingcart:stores-store:v1",
-      storage: createAppJsonStorage()
+      storage: createAppJsonStorage<Pick<StoresState, "selectedStoreId" | "storeItineraries" | "storeStopOrders" | "storeProductOrders">>(),
+      version: 0,
+      partialize: (state) => ({
+        selectedStoreId: state.selectedStoreId,
+        storeItineraries: state.storeItineraries,
+        storeStopOrders: state.storeStopOrders,
+        storeProductOrders: state.storeProductOrders
+      })
     }
   )
 );

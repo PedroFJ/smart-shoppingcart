@@ -1,5 +1,6 @@
 import { defaultStoreId } from "./storesStore";
 import {
+  isLegacyCutoverComplete,
   markLegacyStateImported,
   readLegacyAppState,
   readLegacyUserSettings,
@@ -14,15 +15,21 @@ import { useStoresStore } from "./storesStore";
 import { useSyncStore } from "./syncStore";
 import { useTripStore } from "./tripStore";
 
-let hasBootstrappedLegacyState = false;
-
+// TRANSITIONAL (Pass 1, Commits 5.5-10): App.tsx is still the writer of record,
+// so the legacy blob is re-imported whenever it is newer than the watermark.
+// At Commit 11, when App.tsx is deleted: call markLegacyCutoverComplete() once,
+// which permanently disables this path. The stores become the writer of record.
 export function bootstrapLegacyState(): void {
-  if (hasBootstrappedLegacyState || !shouldImportLegacyState()) {
-    hasBootstrappedLegacyState = true;
+  if (isLegacyCutoverComplete()) {
     return;
   }
 
   const legacyState = readLegacyAppState();
+
+  if (!shouldImportLegacyState(legacyState?.savedAt)) {
+    return;
+  }
+
   const legacySettings = readLegacyUserSettings(defaultStoreId);
 
   useProductsStore.getState().hydrateFromLegacy(legacyState);
@@ -34,6 +41,5 @@ export function bootstrapLegacyState(): void {
   useSyncStore.getState().hydrateFromLegacy();
   useAuthStore.getState().hydrateFromLegacy();
 
-  markLegacyStateImported();
-  hasBootstrappedLegacyState = true;
+  markLegacyStateImported(legacyState!.savedAt);
 }

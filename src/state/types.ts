@@ -30,6 +30,9 @@ export type LocalUserSettings = {
   defaultStoreId: string;
   smartStartEnabled: boolean;
   locale: string;
+  listSearch: string;
+  addSearch: string;
+  departmentFilter: DepartmentFilter;
 };
 
 export type PersistedAppState = {
@@ -42,9 +45,6 @@ export type PersistedAppState = {
   storeProductOrders: StoreProductOrders;
   selectedStoreId: string;
   pickEvents: PickEvent<SectionId>[];
-  departmentFilter: DepartmentFilter;
-  listSearch: string;
-  addSearch: string;
   isCheckoutLocked: boolean;
   lockedPickingIds: string[];
   activeTripItemIds: string[];

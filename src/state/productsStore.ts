@@ -1,9 +1,7 @@
 import { create } from "zustand";
 import { Product, starterProducts } from "../data/sampleData";
-import { createAppJsonStorage, persist, readLegacyAppState, shouldImportLegacyState } from "./persistence";
+import { createAppJsonStorage, persist } from "./persistence";
 import { PersistedAppState } from "./types";
-
-const legacyState = shouldImportLegacyState() ? readLegacyAppState() : null;
 
 type ProductsState = {
   products: Product[];
@@ -14,9 +12,9 @@ type ProductsState = {
 };
 
 export const useProductsStore = create<ProductsState>()(
-  persist<ProductsState>(
+  persist(
     (set) => ({
-      products: legacyState?.products ?? starterProducts,
+      products: starterProducts,
       setProducts: (products) => set({ products }),
       upsertProduct: (product) => set((state) => {
         const exists = state.products.some((currentProduct) => currentProduct.id === product.id);
@@ -38,7 +36,9 @@ export const useProductsStore = create<ProductsState>()(
     }),
     {
       name: "smart-shoppingcart:products-store:v1",
-      storage: createAppJsonStorage()
+      storage: createAppJsonStorage<Pick<ProductsState, "products">>(),
+      version: 0,
+      partialize: (state) => ({ products: state.products })
     }
   )
 );

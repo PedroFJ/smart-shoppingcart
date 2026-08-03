@@ -1,8 +1,6 @@
 import { create } from "zustand";
-import { createAppJsonStorage, persist, readLegacyAppState, shouldImportLegacyState } from "./persistence";
+import { createAppJsonStorage, persist } from "./persistence";
 import { PersistedAppState } from "./types";
-
-const legacyState = shouldImportLegacyState() ? readLegacyAppState() : null;
 
 type TripState = {
   isCheckoutLocked: boolean;
@@ -18,11 +16,11 @@ type TripState = {
 };
 
 export const useTripStore = create<TripState>()(
-  persist<TripState>(
+  persist(
     (set) => ({
-      isCheckoutLocked: legacyState?.isCheckoutLocked ?? false,
-      lockedPickingIds: legacyState?.lockedPickingIds ?? [],
-      activeTripItemIds: legacyState?.activeTripItemIds ?? [],
+      isCheckoutLocked: false,
+      lockedPickingIds: [],
+      activeTripItemIds: [],
       tripMode: "normal",
       setCheckoutLocked: (isCheckoutLocked) => set({ isCheckoutLocked }),
       setLockedPickingIds: (lockedPickingIds) => set({ lockedPickingIds }),
@@ -49,7 +47,14 @@ export const useTripStore = create<TripState>()(
     }),
     {
       name: "smart-shoppingcart:trip-store:v1",
-      storage: createAppJsonStorage()
+      storage: createAppJsonStorage<Pick<TripState, "isCheckoutLocked" | "lockedPickingIds" | "activeTripItemIds" | "tripMode">>(),
+      version: 0,
+      partialize: (state) => ({
+        isCheckoutLocked: state.isCheckoutLocked,
+        lockedPickingIds: state.lockedPickingIds,
+        activeTripItemIds: state.activeTripItemIds,
+        tripMode: state.tripMode
+      })
     }
   )
 );

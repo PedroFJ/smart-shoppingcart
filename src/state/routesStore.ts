@@ -1,10 +1,8 @@
 import { create } from "zustand";
 import { defaultItinerary, SectionId } from "../data/sampleData";
 import { PickEvent } from "../domain/routeInference";
-import { createAppJsonStorage, persist, readLegacyAppState, shouldImportLegacyState } from "./persistence";
+import { createAppJsonStorage, persist } from "./persistence";
 import { PersistedAppState, StoreItineraries } from "./types";
-
-const legacyState = shouldImportLegacyState() ? readLegacyAppState() : null;
 
 type RoutesState = {
   itinerary: SectionId[];
@@ -17,11 +15,11 @@ type RoutesState = {
 };
 
 export const useRoutesStore = create<RoutesState>()(
-  persist<RoutesState>(
+  persist(
     (set) => ({
-      itinerary: legacyState?.itinerary ?? defaultItinerary,
-      storeItineraries: legacyState?.storeItineraries ?? {},
-      pickEvents: legacyState?.pickEvents ?? [],
+      itinerary: defaultItinerary,
+      storeItineraries: {},
+      pickEvents: [],
       setItinerary: (itinerary) => set({ itinerary }),
       setStoreItineraries: (storeItineraries) => set({ storeItineraries }),
       setPickEvents: (pickEvents) => set({ pickEvents }),
@@ -39,7 +37,13 @@ export const useRoutesStore = create<RoutesState>()(
     }),
     {
       name: "smart-shoppingcart:routes-store:v1",
-      storage: createAppJsonStorage()
+      storage: createAppJsonStorage<Pick<RoutesState, "itinerary" | "storeItineraries" | "pickEvents">>(),
+      version: 0,
+      partialize: (state) => ({
+        itinerary: state.itinerary,
+        storeItineraries: state.storeItineraries,
+        pickEvents: state.pickEvents
+      })
     }
   )
 );

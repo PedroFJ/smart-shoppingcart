@@ -17,6 +17,7 @@ import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from "expo-spe
 import { Redirect } from "expo-router";
 import { defaultItinerary, Product, SectionId, sections, starterProducts } from "./src/data/sampleData";
 import { inferSectionRoute, PickEvent, sortByRoute } from "./src/domain/routeInference";
+import { isSavedAtNewer } from "./src/domain/savedAt";
 import { getDeviceLocalStorage, LocalStorageLike } from "./src/lib/deviceStorage";
 import { defaultSyncSpaceId, isSupabaseConfigured, supabase } from "./src/lib/supabase";
 
@@ -67,9 +68,6 @@ type PersistedAppState = {
   storeProductOrders: StoreProductOrders;
   selectedStoreId: string;
   pickEvents: PickEvent<SectionId>[];
-  departmentFilter: DepartmentFilter;
-  listSearch: string;
-  addSearch: string;
   isCheckoutLocked: boolean;
   lockedPickingIds: string[];
   activeTripItemIds: string[];
@@ -83,6 +81,9 @@ type LocalUserSettings = {
   voiceSearchEnabled: boolean;
   defaultStoreId: string;
   smartStartEnabled: boolean;
+  departmentFilter: DepartmentFilter;
+  listSearch: string;
+  addSearch: string;
 };
 
 type RemoteSnapshotRow = {
@@ -150,7 +151,10 @@ const defaultLocalUserSettings: LocalUserSettings = {
   userName: "",
   voiceSearchEnabled: true,
   defaultStoreId,
-  smartStartEnabled: false
+  smartStartEnabled: false,
+  departmentFilter: "all",
+  listSearch: "",
+  addSearch: ""
 };
 
 export default function App() {
@@ -194,9 +198,9 @@ export default function App() {
   });
   const [pickEvents, setPickEvents] = useState<PickEvent<SectionId>[]>(() => initialAppState?.pickEvents ?? []);
   const [lastChange, setLastChange] = useState<ShoppingItem | null>(null);
-  const [departmentFilter, setDepartmentFilter] = useState<DepartmentFilter>(() => initialAppState?.departmentFilter ?? "all");
-  const [listSearch, setListSearch] = useState(() => initialAppState?.listSearch ?? "");
-  const [addSearch, setAddSearch] = useState(() => initialAppState?.addSearch ?? "");
+  const [departmentFilter, setDepartmentFilter] = useState<DepartmentFilter>(() => localUserSettings.departmentFilter);
+  const [listSearch, setListSearch] = useState(() => localUserSettings.listSearch);
+  const [addSearch, setAddSearch] = useState(() => localUserSettings.addSearch);
   const [shoppingDoneNotice, setShoppingDoneNotice] = useState(() => initialAppState?.shoppingDoneNotice ?? false);
   const [isCheckoutLocked, setIsCheckoutLocked] = useState(() => initialAppState?.isCheckoutLocked ?? false);
   const [lockedPickingIds, setLockedPickingIds] = useState<Set<string> | null>(() => {
@@ -207,8 +211,8 @@ export default function App() {
   });
 
   useEffect(() => {
-    setProducts((current) => current.map(normalizeExistingProduct));
-    setShoppingItems((current) => current.map(normalizeExistingShoppingItem));
+    setProducts((current) => normalizeCollection(current, normalizeExistingProduct));
+    setShoppingItems((current) => normalizeCollection(current, normalizeExistingShoppingItem));
   }, []);
 
   useEffect(() => {
@@ -252,7 +256,7 @@ export default function App() {
       }
 
       if (data?.state) {
-        if (initialAppState && isSavedStateNewer(initialAppState.savedAt, data.state.savedAt)) {
+        if (initialAppState && isSavedAtNewer(initialAppState.savedAt, data.state.savedAt)) {
           remoteReady.current = true;
           pushRemoteAppState(createPersistedAppState());
           return;
@@ -285,7 +289,7 @@ export default function App() {
             return;
           }
 
-          if (!isSavedStateNewer(nextRow.state.savedAt, latestLocalSavedAt.current)) {
+          if (!isSavedAtNewer(nextRow.state.savedAt, latestLocalSavedAt.current)) {
             return;
           }
 
@@ -339,8 +343,6 @@ export default function App() {
       pushRemoteAppState(nextState);
     }, 600);
   }, [
-    addSearch,
-    departmentFilter,
     isCheckoutLocked,
     activeTripItemIds,
     itinerary,
@@ -348,7 +350,6 @@ export default function App() {
     storeItineraries,
     storeStopOrders,
     storeProductOrders,
-    listSearch,
     lockedPickingIds,
     pickEvents,
     products,
@@ -385,9 +386,6 @@ export default function App() {
       storeProductOrders,
       selectedStoreId,
       pickEvents,
-      departmentFilter,
-      listSearch,
-      addSearch,
       isCheckoutLocked,
       lockedPickingIds: lockedPickingIds ? Array.from(lockedPickingIds) : [],
       activeTripItemIds: activeTripItemIds ? Array.from(activeTripItemIds) : [],
@@ -434,13 +432,25 @@ export default function App() {
     setStoreProductOrders(hydrateStoreProductOrders(nextState.storeProductOrders));
     setSelectedStoreId(isSupermarketId(nextState.selectedStoreId) ? nextState.selectedStoreId : defaultStoreId);
     setPickEvents(nextState.pickEvents.filter(isPickEventLike).map(hydratePickEvent));
-    setDepartmentFilter(isDepartmentFilter(nextState.departmentFilter) ? nextState.departmentFilter : "all");
-    setListSearch(nextState.listSearch ?? "");
-    setAddSearch(nextState.addSearch ?? "");
     setIsCheckoutLocked(Boolean(nextState.isCheckoutLocked));
     setLockedPickingIds(nextState.lockedPickingIds.length ? new Set(nextState.lockedPickingIds) : null);
     setActiveTripItemIds(nextState.activeTripItemIds.length ? new Set(nextState.activeTripItemIds) : null);
     setShoppingDoneNotice(Boolean(nextState.shoppingDoneNotice));
+  }
+
+  function updateDepartmentFilter(departmentFilter: DepartmentFilter) {
+    setDepartmentFilter(departmentFilter);
+    setLocalUserSettings((current) => ({ ...current, departmentFilter }));
+  }
+
+  function updateListSearch(listSearch: string) {
+    setListSearch(listSearch);
+    setLocalUserSettings((current) => ({ ...current, listSearch }));
+  }
+
+  function updateAddSearch(addSearch: string) {
+    setAddSearch(addSearch);
+    setLocalUserSettings((current) => ({ ...current, addSearch }));
   }
 
   function buildNextShoppingList(items: ShoppingItem[], tripItemIds: Set<string> | null): ShoppingItem[] {
@@ -504,9 +514,9 @@ export default function App() {
     setProducts((current) => mergeProductsWithShoppingItems(current, [withStatus(classifiedProduct)]));
     setShoppingItems((current) => [...current, withStatus(classifiedProduct)]);
     addProductToActiveTrip(classifiedProduct.id);
-    setAddSearch("");
-    setDepartmentFilter(classifiedProduct.sectionId);
-    setListSearch(classifiedProduct.name);
+    updateAddSearch("");
+    updateDepartmentFilter(classifiedProduct.sectionId);
+    updateListSearch(classifiedProduct.name);
     setScreen("list");
   }
 
@@ -818,9 +828,9 @@ export default function App() {
     setIsCheckoutLocked(false);
     setLockedPickingIds(null);
     setActiveTripItemIds(null);
-    setDepartmentFilter("all");
-    setListSearch("");
-    setAddSearch("");
+    updateDepartmentFilter("all");
+    updateListSearch("");
+    updateAddSearch("");
     setShoppingDoneNotice(true);
     setScreen("list");
   }
@@ -857,9 +867,9 @@ export default function App() {
           <ListScreen
             items={neededItems}
             departmentFilter={departmentFilter}
-            onChangeDepartmentFilter={setDepartmentFilter}
+            onChangeDepartmentFilter={updateDepartmentFilter}
             searchText={listSearch}
-            onChangeSearchText={setListSearch}
+            onChangeSearchText={updateListSearch}
             shoppingDoneNotice={shoppingDoneNotice}
             onClearShoppingDoneNotice={() => setShoppingDoneNotice(false)}
             onRemove={(productId) => updateItemStatus(productId, "skipped")}
@@ -875,9 +885,9 @@ export default function App() {
             products={products}
             listProductIds={listProductIds}
             departmentFilter={departmentFilter}
-            onChangeDepartmentFilter={setDepartmentFilter}
+            onChangeDepartmentFilter={updateDepartmentFilter}
             searchText={addSearch}
-            onChangeSearchText={setAddSearch}
+            onChangeSearchText={updateAddSearch}
             onAdd={addProduct}
             onCreateProduct={createAndAddProduct}
             onUpdateProduct={updateCatalogProduct}
@@ -2267,9 +2277,6 @@ function readPersistedAppState(): PersistedAppState | null {
     const pickEvents = Array.isArray(parsedState.pickEvents)
       ? parsedState.pickEvents.filter(isPickEventLike).map(hydratePickEvent)
       : [];
-    const departmentFilter = isDepartmentFilter(parsedState.departmentFilter)
-      ? parsedState.departmentFilter
-      : "all";
     const lockedPickingIds = Array.isArray(parsedState.lockedPickingIds)
       ? parsedState.lockedPickingIds.filter((id): id is string => typeof id === "string")
       : [];
@@ -2296,9 +2303,6 @@ function readPersistedAppState(): PersistedAppState | null {
       storeProductOrders,
       selectedStoreId,
       pickEvents: shouldResetTripState ? [] : pickEvents,
-      departmentFilter,
-      listSearch: typeof parsedState.listSearch === "string" ? parsedState.listSearch : "",
-      addSearch: "",
       isCheckoutLocked: false,
       lockedPickingIds: [],
       activeTripItemIds: shouldResetTripState ? [] : activeTripItemIds.length > 0 ? activeTripItemIds : lockedPickingIds,
@@ -2327,30 +2331,6 @@ function writePersistedAppState(state: PersistedAppState): void {
   }
 }
 
-function isSavedStateNewer(candidateSavedAt?: string, baselineSavedAt?: string): boolean {
-  const candidateTime = parseSavedAt(candidateSavedAt);
-  const baselineTime = parseSavedAt(baselineSavedAt);
-
-  if (candidateTime === null) {
-    return false;
-  }
-
-  if (baselineTime === null) {
-    return true;
-  }
-
-  return candidateTime > baselineTime;
-}
-
-function parseSavedAt(savedAt?: string): number | null {
-  if (!savedAt) {
-    return null;
-  }
-
-  const time = new Date(savedAt).getTime();
-  return Number.isNaN(time) ? null : time;
-}
-
 function readLocalUserSettings(): LocalUserSettings {
   const storage = getLocalStorage();
 
@@ -2377,7 +2357,16 @@ function readLocalUserSettings(): LocalUserSettings {
         : defaultLocalUserSettings.defaultStoreId,
       smartStartEnabled: typeof parsedSettings.smartStartEnabled === "boolean"
         ? parsedSettings.smartStartEnabled
-        : defaultLocalUserSettings.smartStartEnabled
+        : defaultLocalUserSettings.smartStartEnabled,
+      departmentFilter: isDepartmentFilter(parsedSettings.departmentFilter)
+        ? parsedSettings.departmentFilter
+        : defaultLocalUserSettings.departmentFilter,
+      listSearch: typeof parsedSettings.listSearch === "string"
+        ? parsedSettings.listSearch
+        : defaultLocalUserSettings.listSearch,
+      addSearch: typeof parsedSettings.addSearch === "string"
+        ? parsedSettings.addSearch
+        : defaultLocalUserSettings.addSearch
     };
   } catch {
     return defaultLocalUserSettings;
@@ -2744,6 +2733,33 @@ function normalizeExistingShoppingItem(item: ShoppingItem): ShoppingItem {
     sectionId: normalizedProduct.sectionId,
     acceptsAlternatives: normalizedProduct.defaultAcceptsAlternatives
   };
+}
+
+function normalizeCollection<T extends Record<string, unknown>>(items: T[], normalize: (item: T) => T): T[] {
+  let changed = false;
+  const normalizedItems = items.map((item) => {
+    const normalizedItem = normalize(item);
+
+    if (!shallowEqualRecord(item, normalizedItem)) {
+      changed = true;
+    }
+
+    return normalizedItem;
+  });
+
+  return changed ? normalizedItems : items;
+}
+
+function shallowEqualRecord(left: Record<string, unknown>, right: Record<string, unknown>): boolean {
+  const keys = new Set([...Object.keys(left), ...Object.keys(right)]);
+
+  for (const key of keys) {
+    if (!Object.is(left[key], right[key])) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 function formatProductDetails(product: Product): string {
