@@ -925,3 +925,35 @@ Next recommended step:
 - Request and reconcile Claude's next contract from the GitHub-backed clone before starting the next split commit.
 
 Signed-off-by: Codex <codex@openai.com>
+
+### 2026-08-04 Europe/Lisbon - Codex - Commit 7a route-ordering domain
+
+Status: Commit 7a implementation complete in `C:\Users\PedroFreire\dev\smart-shoppingcart`. No UI, route, or store wiring changed; the existing monolith imports the moved pure helpers.
+
+Completed:
+
+- Added `src/domain/routeOrdering.ts` with `CART_DRAG_STEP`, the SuperCor stop catalogue, and the fifteen route/ordering helpers specified by the Commit 7 contract.
+- Added `src/domain/tripList.ts` and moved `buildNextShoppingList` there. The function closes over no component state and reads only its `items` and `tripItemIds` parameters.
+- Removed the moved declarations from `App.tsx` and replaced them with imports.
+- Left `app/(app)/(tabs)/list.tsx`'s locale-aware `sortShoppingItems` unchanged. Its collation behavior has diverged from the monolith helper and remains a deliberate Commit 8 or 11 decision.
+
+Validation:
+
+- `npm.cmd run typecheck` passed.
+- `npm.cmd run i18n:check` passed with zero plain JSX text nodes found.
+- `npx.cmd expo export --platform web --clear --output-dir dist-router-smoke` passed.
+- The exported HTML retained its classic deferred script tag and the final bundle contained zero `import.meta` occurrences.
+- Headless Edge served the export without modification and reported zero runtime or console errors.
+- Cart smoke passed: three seeded products opened in the expected SuperCor order, an arrow reorder persisted, an actual pointer drag through the existing Responder API persisted, and the manual product order survived reload.
+- Temporary export, Edge profile, and smoke-harness files were removed after validation.
+
+Flags / Roadblocks:
+
+- Native testing was unavailable; 7a intentionally changes no native or UI behavior.
+- The new domain module keeps private copies of the matching/sort-label primitives used by the moved SuperCor helper so the broader Add/List search behavior remains untouched in this zero-behavior-change commit.
+
+Next recommended step:
+
+- Commit and push this green 7a baseline before starting Commit 7b, as required by `docs/commit-7-shop-brief.md`.
+
+Signed-off-by: Codex <codex@openai.com>
