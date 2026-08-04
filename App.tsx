@@ -10,12 +10,19 @@ import {
   TextInput,
   TouchableOpacity,
   useWindowDimensions,
-  View,
-  ViewStyle
+  View
 } from "react-native";
 import { Redirect } from "expo-router";
 import { defaultItinerary, Product, SectionId, sections, starterProducts } from "./src/data/sampleData";
 import { PickEvent, sortByRoute } from "./src/domain/routeInference";
+import {
+  formatLastPicked,
+  formatLastPickedShort,
+  formatProductDetails,
+  getProductSortLabel,
+  includesAny,
+  normalizeQuantityText
+} from "./src/domain/productFormat";
 import {
   completeSectionRoute,
   completeStoreStopOrder,
@@ -24,10 +31,13 @@ import {
   sortShoppingItems
 } from "./src/domain/routeOrdering";
 import { isSavedAtNewer } from "./src/domain/savedAt";
+import { filterBySearch, normalizeForMatching } from "./src/domain/search";
 import { useVoiceSearch } from "./src/hooks/useVoiceSearch";
 import { getDeviceLocalStorage, LocalStorageLike } from "./src/lib/deviceStorage";
 import { defaultSyncSpaceId, isSupabaseConfigured, supabase } from "./src/lib/supabase";
+import { useSettingsStore } from "./src/state/settingsStore";
 import { VoiceSearchButton } from "./src/ui/components/VoiceSearchButton";
+import { getSectionCardStyle } from "./src/ui/sectionStyles";
 
 type Screen = "welcome" | "list" | "add" | "shop" | "settings" | "summary";
 type MainScreen = Exclude<Screen, "summary">;
@@ -101,10 +111,8 @@ const LOCAL_USER_SETTINGS_KEY = "smart-shoppingcart:user-settings:v1";
 const SYNC_CLIENT_ID_KEY = "smart-shoppingcart:sync-client-id";
 const SYNC_SPACE_ID_KEY = "smart-shoppingcart:sync-space-id";
 const CURRENT_STORAGE_VERSION = 2;
-const searchStopWords = new Set(["a", "as", "o", "os", "de", "da", "das", "do", "dos", "e", "the", "of", "for"]);
 const androidStatusBarInset = Platform.OS === "android" ? (StatusBar.currentHeight ?? 24) : 0;
 const androidNavigationBarInset = Platform.OS === "android" ? 24 : 0;
-const sectionNameById = new Map(sections.map((section) => [section.id, section.name]));
 const starterProductById = new Map(starterProducts.map((product) => [product.id, product]));
 const webSearchInputChromeReset = {
   outlineStyle: "none",
@@ -252,6 +260,7 @@ const catalogConfirmCancelWebTextStyle: CSSProperties = {
 
 export default function App() {
   const { height, width } = useWindowDimensions();
+  const locale = useSettingsStore((state) => state.locale);
   const [initialAppState] = useState(readPersistedAppState);
   const syncClientId = useRef(getOrCreateSyncClientId());
   const remoteApplyInProgress = useRef(false);
@@ -450,8 +459,12 @@ export default function App() {
   ]);
 
   const neededItems = useMemo(() => {
-    return sortShoppingItems(shoppingItems.filter((item) => item.status === "needed"), defaultItinerary);
-  }, [shoppingItems]);
+    return sortShoppingItems(
+      shoppingItems.filter((item) => item.status === "needed"),
+      defaultItinerary,
+      locale
+    );
+  }, [locale, shoppingItems]);
   const listProductIds = useMemo(() => new Set(neededItems.map((item) => item.id)), [neededItems]);
   const addableProductCount = useMemo(() => {
     return products.filter((product) => !listProductIds.has(product.id)).length;
@@ -1237,59 +1250,6 @@ function withStatus(product: Product): ShoppingItem {
   };
 }
 
-function includesAny(value: string, keywords: string[]): boolean {
-  return keywords.some((keyword) => value.includes(keyword));
-}
-
-function getProductSortLabel(product: Product): string {
-  if (product.sectionId !== "fruit-veg") {
-    return product.name;
-  }
-
-  return `${getFruitVegSortPrefix(product.name)} ${product.name}`;
-}
-
-function getFruitVegSortPrefix(productName: string): string {
-  const normalizedName = normalizeForMatching(productName);
-  const fruitKeywords = [
-    "ananas",
-    "banana",
-    "frutos vermelhos",
-    "kiwi",
-    "laranja",
-    "lima",
-    "limao",
-    "maca",
-    "pera"
-  ];
-  const vegetableKeywords = [
-    "agriao",
-    "alface",
-    "alho",
-    "batata",
-    "brocolo",
-    "cebola",
-    "cenoura",
-    "chuchu",
-    "coentro",
-    "courgete",
-    "feijao verde",
-    "hortela",
-    "salsa",
-    "tomate"
-  ];
-
-  if (fruitKeywords.some((keyword) => normalizedName.includes(keyword))) {
-    return "1-fruta";
-  }
-
-  if (vegetableKeywords.some((keyword) => normalizedName.includes(keyword))) {
-    return "2-legume";
-  }
-
-  return "3-outros";
-}
-
 function readPersistedAppState(): PersistedAppState | null {
   const storage = getLocalStorage();
 
@@ -1814,158 +1774,6 @@ function shallowEqualRecord(left: Record<string, unknown>, right: Record<string,
   return true;
 }
 
-function formatProductDetails(product: Product): string {
-  const brand = product.brand ? `${product.brand} - ` : "";
-  return `${brand}${sectionNameById.get(product.sectionId)} - ${product.defaultQuantity}`;
-}
-
-function formatItemDetails(item: ShoppingItem): string {
-  const brand = item.brand ? `${item.brand} - ` : "";
-  return `${brand}${sectionNameById.get(item.sectionId)} - ${item.quantity || "1 un"}`;
-}
-
-function formatListItemDetails(item: ShoppingItem): string {
-  const brand = item.brand ? `${item.brand} - ` : "";
-  return `${brand}${sectionNameById.get(item.sectionId)}`;
-}
-
-function normalizeQuantityText(value: string): string {
-  const trimmedValue = value.trim().replace(/\s+/g, " ");
-
-  if (!trimmedValue) {
-    return "1 un";
-  }
-
-  if (/^\d+([,.]\d+)?$/.test(trimmedValue)) {
-    return `${trimmedValue} un`;
-  }
-
-  return trimmedValue;
-}
-
-function formatLastPicked(lastPickedAt?: string): string {
-  if (!lastPickedAt) {
-    return "Última compra: nunca";
-  }
-
-  const date = new Date(lastPickedAt);
-
-  if (Number.isNaN(date.getTime())) {
-    return "Última compra: desconhecida";
-  }
-
-  return `Última compra: ${date.toLocaleDateString("pt-PT")}`;
-}
-
-function formatLastPickedShort(lastPickedAt?: string): string {
-  if (!lastPickedAt) {
-    return "Nunca";
-  }
-
-  const date = new Date(lastPickedAt);
-
-  if (Number.isNaN(date.getTime())) {
-    return "Sem data";
-  }
-
-  return date.toLocaleDateString("pt-PT");
-}
-
-function filterBySearch<T extends Product | ShoppingItem>(items: T[], searchText: string): T[] {
-  const searchQuery = parseSearchQuery(searchText);
-
-  if (searchQuery.groups.length === 0) {
-    return items;
-  }
-
-  if (searchQuery.hasExplicitOperator) {
-    return items.filter((item) => matchesSearchGroups(item, searchQuery.groups));
-  }
-
-  const andMatches = items.filter((item) => {
-    return matchesSearchGroups(item, [searchQuery.implicitTerms]);
-  });
-
-  if (andMatches.length > 0) {
-    return andMatches;
-  }
-
-  return items.filter((item) => {
-    return matchesSearchGroups(item, searchQuery.implicitTerms.map((term) => [term]));
-  });
-}
-
-function matchesSearchGroups(product: Product | ShoppingItem, searchGroups: string[][]): boolean {
-  const searchableText = [
-    product.name,
-    product.brand,
-    product.note,
-    sectionNameById.get(product.sectionId),
-    "quantity" in product ? product.quantity : product.defaultQuantity
-  ]
-    .filter(Boolean)
-    .join(" ");
-
-  const normalizedSearchableText = normalizeForMatching(searchableText);
-  return searchGroups.some((group) => {
-    return group.every((term) => normalizedSearchableText.includes(term));
-  });
-}
-
-function parseSearchQuery(searchText: string): { groups: string[][]; hasExplicitOperator: boolean; implicitTerms: string[] } {
-  const tokens = normalizeForMatching(searchText)
-    .split(" ")
-    .map((term) => term.trim())
-    .filter((term) => Boolean(term) && !searchStopWords.has(term));
-  const groups: string[][] = [];
-  let currentGroup: string[] = [];
-  let pendingOperator: "and" | "or" = "or";
-  let hasExplicitOperator = false;
-  const implicitTerms: string[] = [];
-
-  tokens.forEach((token) => {
-    if (isSearchAndOperator(token)) {
-      pendingOperator = "and";
-      hasExplicitOperator = true;
-      return;
-    }
-
-    if (isSearchOrOperator(token)) {
-      pendingOperator = "or";
-      hasExplicitOperator = true;
-      return;
-    }
-
-    implicitTerms.push(token);
-
-    if (pendingOperator === "and" && currentGroup.length > 0) {
-      currentGroup.push(token);
-    } else {
-      if (currentGroup.length > 0) {
-        groups.push(currentGroup);
-      }
-
-      currentGroup = [token];
-    }
-
-    pendingOperator = "or";
-  });
-
-  if (currentGroup.length > 0) {
-    groups.push(currentGroup);
-  }
-
-  return { groups, hasExplicitOperator, implicitTerms };
-}
-
-function isSearchAndOperator(token: string): boolean {
-  return token === "and" || token === "e";
-}
-
-function isSearchOrOperator(token: string): boolean {
-  return token === "or" || token === "ou";
-}
-
 function classifyNewProduct(input: NewProductInput, products: Product[]): Product | null {
   const rawName = input.rawName.trim();
 
@@ -2222,81 +2030,9 @@ function normalizeProductId(value: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-function normalizeForMatching(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/ç/g, "c")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
-
-function getSectionCardStyle(sectionId: SectionId): ViewStyle {
-  return sectionCardStyles[sectionId] ?? sectionCardStyles.pantry;
-}
-
-const sectionCardStyles = StyleSheet.create<Record<SectionId, ViewStyle>>({
-  bakery: {
-    backgroundColor: "#FFF7E6",
-    borderColor: "#DDA13B",
-    borderLeftWidth: 6
-  },
-  "personal-care": {
-    backgroundColor: "#F3F0FF",
-    borderColor: "#7C6BC4",
-    borderLeftWidth: 6
-  },
-  cleaning: {
-    backgroundColor: "#EEF8F7",
-    borderColor: "#249184",
-    borderLeftWidth: 6
-  },
-  "fruit-veg": {
-    backgroundColor: "#F0F8E8",
-    borderColor: "#5D9436",
-    borderLeftWidth: 6
-  },
-  frozen: {
-    backgroundColor: "#ECF7FF",
-    borderColor: "#368ABF",
-    borderLeftWidth: 6
-  },
-  meat: {
-    backgroundColor: "#FFF0F0",
-    borderColor: "#C35C58",
-    borderLeftWidth: 6
-  },
-  fish: {
-    backgroundColor: "#EFF8FF",
-    borderColor: "#2E7FA3",
-    borderLeftWidth: 6
-  },
-  dairy: {
-    backgroundColor: "#F5F7FF",
-    borderColor: "#6680C4",
-    borderLeftWidth: 6
-  },
-  pantry: {
-    backgroundColor: "#FFF5ED",
-    borderColor: "#C77A3A",
-    borderLeftWidth: 6
-  },
-  drinks: {
-    backgroundColor: "#EEF6FF",
-    borderColor: "#3178B8",
-    borderLeftWidth: 6
-  },
-  household: {
-    backgroundColor: "#F3F6F1",
-    borderColor: "#6E8064",
-    borderLeftWidth: 6
-  }
-});
 
 const styles = StyleSheet.create({
   safeArea: {

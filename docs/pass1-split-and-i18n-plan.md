@@ -1032,3 +1032,35 @@ Next recommended step:
 - Commit and push 7c, then begin the 8a shared-helper consolidation.
 
 Signed-off-by: Codex <codex@openai.com>
+
+### 2026-08-04 Europe/Lisbon - Codex - Commit 8a shared-helper consolidation
+
+Status: Commit 8a complete. Search, product formatting, section styles, and shopping-list sorting now have shared implementations consumed by the monolith and extracted routes.
+
+Completed:
+
+- Added `src/domain/search.ts`, `src/domain/productFormat.ts`, and `src/ui/sectionStyles.ts`; removed the corresponding declarations from `App.tsx`, List, and Shop.
+- Extended the brief's audit to the copies it omitted: `useTripLifecycle` now imports `normalizeQuantityText`, and `routeOrdering` imports the shared matching, keyword, and product-sort helpers instead of retaining private copies.
+- Consolidated App's fixed pt-PT and List's locale/i18n-aware `formatLastPicked` variants behind one overloaded function, preserving both call-site behaviors.
+- Kept the newer locale-aware `sortShoppingItems(items, route, locale)` implementation. List already supplied its locale; the remaining monolith now reads locale from `settingsStore`. Non-SuperCor Shop ordering retains its previous pt-PT collation.
+- Verified by repository-wide declaration audit that every helper named by the brief, plus the omitted lifecycle/route-ordering copies, now has one implementation.
+
+Validation:
+
+- `npm.cmd run typecheck` and `npm.cmd run i18n:check` passed with no plain JSX text nodes.
+- `npx.cmd expo export --platform web --clear` passed. The unmodified export remained a classic deferred bundle with zero `import.meta` occurrences.
+- Headless Edge search smoke passed for a two-word query, `E`, `OU`, and an accented query.
+- The List order matched `defaultItinerary` after the locale-aware consolidation.
+- All eleven section card colors matched their pre-move values in both List and Shop.
+- The exported-bundle smoke reported zero browser errors; its temporary harness and profile were removed.
+
+Flags / Roadblocks:
+
+- The brief's claim that only `sortShoppingItems` differed was incomplete: the lifecycle quantity helper was source-different but behavior-equivalent, routeOrdering held private copies from 7a, and List's `formatLastPicked` was intentionally localized. Those differences were preserved or reconciled explicitly above.
+- Native device/simulator validation was unavailable; 8a changes shared pure helpers and styles, all exercised on web.
+
+Next recommended step:
+
+- Commit and push 8a, then extract Add and its modal forms in 8b.
+
+Signed-off-by: Codex <codex@openai.com>

@@ -9,11 +9,11 @@ import {
   Text,
   TouchableOpacity,
   useWindowDimensions,
-  View,
-  ViewStyle
+  View
 } from "react-native";
 import { useTranslation } from "react-i18next";
-import { defaultItinerary, SectionId, sections } from "../../../src/data/sampleData";
+import { defaultItinerary } from "../../../src/data/sampleData";
+import { formatItemDetails } from "../../../src/domain/productFormat";
 import {
   CART_DRAG_STEP,
   clampIndex,
@@ -25,11 +25,10 @@ import { useTripLifecycle } from "../../../src/hooks/useTripLifecycle";
 import { bootstrapLegacyState } from "../../../src/state/bootstrap";
 import { useShoppingListStore } from "../../../src/state/shoppingListStore";
 import { useStoresStore } from "../../../src/state/storesStore";
-import { ShoppingItem } from "../../../src/state/types";
 import { useTripStore } from "../../../src/state/tripStore";
+import { getSectionCardStyle } from "../../../src/ui/sectionStyles";
 
 const androidStatusBarInset = Platform.OS === "android" ? (StatusBar.currentHeight ?? 24) : 0;
-const sectionNameById = new Map(sections.map((section) => [section.id, section.name]));
 
 export default function ShopRoute() {
   const { t } = useTranslation("shop");
@@ -305,15 +304,6 @@ export default function ShopRoute() {
   );
 }
 
-function formatItemDetails(item: ShoppingItem): string {
-  const brand = item.brand ? `${item.brand} - ` : "";
-  return `${brand}${sectionNameById.get(item.sectionId)} - ${item.quantity || "1 un"}`;
-}
-
-function getSectionCardStyle(sectionId: SectionId): ViewStyle {
-  return sectionCardStyles[sectionId] ?? sectionCardStyles.pantry;
-}
-
 const checkoutConfirmWebButtonStyle = {
   alignItems: "center",
   backgroundColor: "#A33E22",
@@ -333,20 +323,6 @@ const checkoutConfirmWebTextStyle = {
   fontSize: 16,
   fontWeight: 800
 } as const;
-
-const sectionCardStyles = StyleSheet.create<Record<SectionId, ViewStyle>>({
-  bakery: { backgroundColor: "#FFF7E6", borderColor: "#DDA13B", borderLeftWidth: 6 },
-  "personal-care": { backgroundColor: "#F3F0FF", borderColor: "#7C6BC4", borderLeftWidth: 6 },
-  cleaning: { backgroundColor: "#EEF8F7", borderColor: "#249184", borderLeftWidth: 6 },
-  "fruit-veg": { backgroundColor: "#F0F8E8", borderColor: "#5D9436", borderLeftWidth: 6 },
-  frozen: { backgroundColor: "#ECF7FF", borderColor: "#368ABF", borderLeftWidth: 6 },
-  meat: { backgroundColor: "#FFF0F0", borderColor: "#C35C58", borderLeftWidth: 6 },
-  fish: { backgroundColor: "#EFF8FF", borderColor: "#2E7FA3", borderLeftWidth: 6 },
-  dairy: { backgroundColor: "#F5F7FF", borderColor: "#6680C4", borderLeftWidth: 6 },
-  pantry: { backgroundColor: "#FFF5ED", borderColor: "#C77A3A", borderLeftWidth: 6 },
-  drinks: { backgroundColor: "#EEF6FF", borderColor: "#3178B8", borderLeftWidth: 6 },
-  household: { backgroundColor: "#F3F6F1", borderColor: "#6E8064", borderLeftWidth: 6 }
-});
 
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: "#F5F7F9", flex: 1, paddingTop: androidStatusBarInset },

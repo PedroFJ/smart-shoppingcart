@@ -1,5 +1,7 @@
 import { sections, type Product, type SectionId } from "../data/sampleData";
 import type { ShoppingItem } from "../state/types";
+import { getFruitVegSortPrefix, getProductSortLabel, includesAny } from "./productFormat";
+import { normalizeForMatching } from "./search";
 
 export type StoreRouteStop = {
   id: string;
@@ -35,7 +37,7 @@ export const defaultSupercorStopOrder = supercorRouteStops.map((stop) => stop.id
 
 const sectionNameById = new Map(sections.map((section) => [section.id, section.name]));
 
-export function sortShoppingItems(items: ShoppingItem[], route: SectionId[]): ShoppingItem[] {
+export function sortShoppingItems(items: ShoppingItem[], route: SectionId[], locale: string): ShoppingItem[] {
   const routePosition = new Map(route.map((sectionId, index) => [sectionId, index]));
 
   return [...items].sort((a, b) => {
@@ -50,7 +52,7 @@ export function sortShoppingItems(items: ShoppingItem[], route: SectionId[]): Sh
       return (a.customOrder ?? Number.MAX_SAFE_INTEGER) - (b.customOrder ?? Number.MAX_SAFE_INTEGER);
     }
 
-    return getProductSortLabel(a).localeCompare(getProductSortLabel(b), "pt-PT", { sensitivity: "base" });
+    return getProductSortLabel(a).localeCompare(getProductSortLabel(b), locale, { sensitivity: "base" });
   });
 }
 
@@ -63,7 +65,7 @@ export function sortPickingItems(
 ): ShoppingItem[] {
   const routeSortedItems = storeId === "supercor"
     ? sortSupercorPickingItems(items, stopOrder)
-    : sortShoppingItems(items, fallbackRoute);
+    : sortShoppingItems(items, fallbackRoute, "pt-PT");
   return applyManualProductOrder(routeSortedItems, manualOrder);
 }
 
@@ -278,67 +280,4 @@ export function getSupercorRouteStopId(product: Product): string {
   }
 
   return product.sectionId === "pantry" ? "conservas" : "limpeza-casa";
-}
-
-function includesAny(value: string, keywords: string[]): boolean {
-  return keywords.some((keyword) => value.includes(keyword));
-}
-
-function getProductSortLabel(product: Product): string {
-  if (product.sectionId !== "fruit-veg") {
-    return product.name;
-  }
-
-  return `${getFruitVegSortPrefix(product.name)} ${product.name}`;
-}
-
-function getFruitVegSortPrefix(productName: string): string {
-  const normalizedName = normalizeForMatching(productName);
-  const fruitKeywords = [
-    "ananas",
-    "banana",
-    "frutos vermelhos",
-    "kiwi",
-    "laranja",
-    "lima",
-    "limao",
-    "maca",
-    "pera"
-  ];
-  const vegetableKeywords = [
-    "agriao",
-    "alface",
-    "alho",
-    "batata",
-    "brocolo",
-    "cebola",
-    "cenoura",
-    "chuchu",
-    "coentro",
-    "courgete",
-    "feijao verde",
-    "hortela",
-    "salsa",
-    "tomate"
-  ];
-
-  if (fruitKeywords.some((keyword) => normalizedName.includes(keyword))) {
-    return "1-fruta";
-  }
-
-  if (vegetableKeywords.some((keyword) => normalizedName.includes(keyword))) {
-    return "2-legume";
-  }
-
-  return "3-outros";
-}
-
-function normalizeForMatching(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/ç/g, "c")
-    .replace(/\s+/g, " ")
-    .trim();
 }

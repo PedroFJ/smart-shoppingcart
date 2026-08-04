@@ -9,6 +9,7 @@ import {
   sortPickingItems
 } from "../domain/routeOrdering";
 import { buildNextShoppingList } from "../domain/tripList";
+import { normalizeQuantityText } from "../domain/productFormat";
 import { useProductsStore } from "../state/productsStore";
 import { useRoutesStore } from "../state/routesStore";
 import { useSettingsStore } from "../state/settingsStore";
@@ -323,16 +324,6 @@ function moveRouteItem<T extends string>(route: T[], routeItemId: T, direction: 
 
 function isSectionId(value: string): value is SectionId {
   return sections.some((section) => section.id === value);
-}
-
-function normalizeQuantityText(value: string): string {
-  const trimmedValue = value.trim().replace(/\s+/g, " ");
-
-  if (!trimmedValue) {
-    return "1 un";
-  }
-
-  return /^\d+([,.]\d+)?$/.test(trimmedValue) ? `${trimmedValue} un` : trimmedValue;
 }
 
 function mergeProductsWithShoppingItems(products: Product[], items: ShoppingItem[]): Product[] {
