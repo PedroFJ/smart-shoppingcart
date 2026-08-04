@@ -25,11 +25,12 @@ export function useTripLifecycle() {
   function startShoppingTrip(): void {
     const tripState = useTripStore.getState();
 
-    if (tripState.activeTripItemIds.length === 0) {
+    if (!tripState.hasActiveTrip) {
       const neededIds = useShoppingListStore.getState().shoppingItems
         .filter((item) => item.status === "needed")
         .map((item) => item.id);
       tripState.setActiveTripItemIds(neededIds);
+      tripState.setHasActiveTrip(true);
     }
   }
 
@@ -262,7 +263,7 @@ export function useTripLifecycle() {
     const tripIds = tripState.activeTripItemIds.length > 0
       ? tripState.activeTripItemIds
       : tripState.lockedPickingIds;
-    const tripItemIds = tripIds.length > 0 ? new Set(tripIds) : null;
+    const tripItemIds = tripState.hasActiveTrip ? new Set(tripIds) : null;
     const productsState = useProductsStore.getState();
 
     productsState.setProducts(mergeProductsWithShoppingItems(productsState.products, shoppingState.shoppingItems));

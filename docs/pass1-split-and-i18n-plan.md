@@ -1005,3 +1005,30 @@ Next recommended step:
 - Commit and push this green 7b baseline, then request Claude's next contract before beginning Commit 8.
 
 Signed-off-by: Codex <codex@openai.com>
+
+### 2026-08-04 Europe/Lisbon - Codex - Commit 7c active-trip distinction
+
+Status: Commit 7c complete. `tripStore` now represents an explicitly started trip independently from the number of item IDs in its snapshot.
+
+Completed:
+
+- Added persisted `hasActiveTrip` state and its setter to `tripStore`; `startShoppingTrip` sets it and `resetTrip` clears it.
+- Preserved the pre-7b empty-trip behavior deliberately: checking out an explicitly started trip containing zero needed items uses an empty `Set`, so postponed items are dropped. A genuine no-trip finalization still passes `null` and retains the permissive `buildNextShoppingList` branch.
+- Legacy hydration infers an active trip from existing active/locked IDs or a checkout lock. Current Zustand persistence retains the explicit marker across reloads without adding anything to `PersistedAppState`.
+
+Validation:
+
+- `npm.cmd run typecheck` and `npm.cmd run i18n:check` passed.
+- `npx.cmd expo export --platform web --clear` passed; the unmodified output retained a classic deferred script and contained zero `import.meta` occurrences.
+- Headless Edge smoke against the byte-for-byte export passed with zero browser errors: an empty trip was marked active and dropped two postponed products at checkout; a normal picked/missing trip rebuilt the next list with only the missing product as `needed`; finalization cleared `hasActiveTrip`.
+- The temporary browser harness and profile were removed.
+
+Flags / Roadblocks:
+
+- Native device/simulator validation was unavailable; 7c changes persisted lifecycle state rather than platform UI.
+
+Next recommended step:
+
+- Commit and push 7c, then begin the 8a shared-helper consolidation.
+
+Signed-off-by: Codex <codex@openai.com>
