@@ -267,9 +267,15 @@ Brief: `docs/commit-5.7-web-bundle-brief.md`. Added after validating Commits 5.5
 
 First non-trivial screen. Brings `shoppingListStore` and `productsStore` online. The hidden row-tap-toggles-alternatives behaviour (App.tsx:1523) is **explicitly replaced** with a labelled switch on the row — this is part of the UX-issue-5 fix from the synthesis. Note: this is the first UX *change*, not just a refactor; flag it for Codex.
 
-### Commit 7 — Extract **Shop** entry + cart (`(app)/(tabs)/shop/index.tsx` and `[storeId]/index.tsx`)
+### Commit 7 — Extract **Shop** entry + cart + **Summary** (`(app)/(tabs)/shop.tsx`, `(app)/shop/route-editor.tsx`, `(app)/shop/summary.tsx`)
+
+Brief: `docs/commit-7-shop-brief.md`. **Runs as two commits, 7a and 7b.**
 
 > **Swapped with Add on 2026-08-03.** Shop was originally scheduled second because it is the larger diff. That optimises for diff size, which is the wrong objective now: Shop is where the product's value and its worst UX both live, and Add is the safest and least urgent screen in the app. If the sequence stalls again, it should stall *after* Shop, not before it.
+
+> **Summary pulled forward from Commit 9, and the commit split in two (2026-08-04).** The cart writes `pickEvents`; the summary reads them through `inferredRoute`. Moving Shop to a route that writes `routesStore` while the monolith's summary keeps its own `useState` would leave the summary reading an empty array — route learning would stop working with a green typecheck and a passing smoke, because an empty route renders rather than throws. A producer and its consumer do not get split across a commit boundary. Commit 9 keeps its *additive* scope (rename itinerary, discard training trip, inline reorder) and loses the extraction.
+>
+> **7a** moves the pure route/ordering helpers (`sortPickingItems`, `getRouteEditorItems`, `completeStoreStopOrder` and eleven others, App.tsx:2026–2170) into `src/domain/`, with no UI change. **7b** turns Shop, the route editor and Summary into routes. Splitting this way keeps each diff reviewable against a green baseline and puts the mechanical half where it can be verified independently.
 
 The biggest extraction. **Defer the drag-and-drop and pick-row UX rewrite to W4** — keep the existing Responder-API drag code as-is inside the new file. The goal of this commit is structural only. Note that Commit 5.6 has already wired the summary flow and the `Falta` action into the monolith; carry both across unchanged rather than re-deriving them.
 
@@ -283,9 +289,11 @@ Brings `productsStore` mutation actions online. The "Produto novo" inline form (
 
 This is also the right moment for the `FlatList` migration on the catalog grid (review §3.7) — Add is the screen that grows with the household's catalog, and it is the only one where the eager `ScrollView` + `.map()` will actually hurt.
 
-### Commit 9 — Extract **Summary** (`shop/[storeId]/summary.tsx`)
+### Commit 9 — **Summary**: add the missing V1 actions
 
-Small screen. Adds the missing V1 actions: rename itinerary, discard training trip, adjust order inline. The confidence display gains a threshold band (≥0.6 green, 0.3–0.6 amber, <0.3 red) — minor UX improvement, low-cost.
+> **Scope reduced 2026-08-04.** The extraction itself moved into Commit 7b — see the note there. What remains is the additive work only.
+
+Small screen, already extracted. Adds the missing V1 actions: rename itinerary, discard training trip, adjust order inline. The confidence display gains a threshold band (≥0.6 green, 0.3–0.6 amber, <0.3 red) — minor UX improvement, low-cost.
 
 ### Commit 10 — Build new screens that the monolith never had
 
@@ -309,7 +317,7 @@ The monolith is now empty (or down to a few utility functions). Move any remaini
 
 The following are deliberately not in W1+W2 and should not slip in during this work:
 
-- **Shopping Mode UX rewrite (W4)** — the drag-and-drop, haptics, section dividers, swipe actions. Codex must not "fix" this during Commit 7 (Shop); the structural move is the *only* goal of that commit. Pre-empting W4 inside W1 explodes the diff and breaks the green-on-every-commit discipline.
+- **Shopping Mode UX rewrite (W4)** — the drag-and-drop, haptics, section dividers, swipe actions. Codex must not "fix" this during Commit 7b (Shop); the structural move is the *only* goal of that commit. Pre-empting W4 inside W1 explodes the diff and breaks the green-on-every-commit discipline.
 - **Visual / Pass 2** — colours, icons, dark mode, motion. Tokens are scaffolded in `src/ui/tokens.ts` but their *values* stay equivalent to the current hard-coded hexes (App.tsx:3453+).
 - **RLS, account deletion, auth UI (W5)** — placeholders are fine; full implementation is its own workstream.
 - **Telemetry (Sentry/PostHog)** — separate workstream.
