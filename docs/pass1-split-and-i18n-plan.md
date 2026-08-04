@@ -1064,3 +1064,42 @@ Next recommended step:
 - Commit and push 8a, then extract Add and its modal forms in 8b.
 
 Signed-off-by: Codex <codex@openai.com>
+
+### 2026-08-04 Europe/Lisbon - Codex - Commit 8b Add and product modal routes
+
+Status: Commit 8b complete. Add is now a registered Tabs route, product creation and editing are modal routes, and `App.tsx` retains only a redirect for its legacy `add` branch.
+
+Completed:
+
+- Added `app/(app)/(tabs)/add.tsx`, `app/(app)/products/new.tsx`, `app/(app)/products/[productId]/edit.tsx`, and the modal products stack; registered Add beside List and Shop.
+- Kept modal drafts local to their route. Persisted catalog, list, filter, search, and voice settings are read from the existing Zustand stores.
+- Chose the lifecycle-hook pattern established by Commit 7b: `useProductLifecycle` owns add, create, edit, and delete mutations spanning `productsStore`, `shoppingListStore`, `tripStore`, and `routesStore`.
+- Preserved List-owned quantity, note, and alternatives when a catalog product changes. Catalog deletion also removes the corresponding list item and pick history.
+- Moved the complete classification cluster verbatim to `src/domain/productClassification.ts`. `App.tsx` imports the moved classifier and Portuguese correction helper for its remaining persisted-state normalization.
+- Migrated the catalog from `ScrollView` plus `.map()` to `FlatList` with `keyExtractor` and a memoized `renderItem`.
+- Preserved the two-step catalog delete confirmation, four-second timeout, raw DOM web fork, native `onPress`-only branch, 44x44 Edit/Delete targets, Add voice-search wiring, needed-product hiding, and post-create List filter/search navigation.
+- Populated the English and pt-PT Add namespaces and corrected accents while moving visible strings.
+
+Validation:
+
+- `npm.cmd run typecheck`, `npm.cmd run i18n:check`, and `git diff --check` passed.
+- `npx.cmd expo export --platform web --output-dir dist-commit8b` passed. The byte-for-byte output retained a classic deferred script, used no module script, and contained zero `import.meta` occurrences.
+- Headless Edge exercised that exact export at 800x600 and 390x844 with zero application/runtime errors. The temporary static server's missing `/favicon.ico` request was excluded as a server-only resource warning.
+- Adding a catalog product created a `needed` list item and immediately hid the product from Add.
+- Creating `gel banho Dove (promoção)` with a note preserved classification behavior: `Gel Banho`, brand `Dove`, note `Promoção - frasco grande`, `personal-care`, exact-brand preference; it was added and navigation landed on `/list` with the expected filter and search.
+- Editing a catalog product updated its list-facing product fields while preserving the list item's custom `3 un` quantity, note, and alternatives preference.
+- Catalog deletion required confirmation, reverted after four seconds, and on confirmation removed the product, its list item, and its pick event.
+- A seeded 83-product catalog rendered 21 synthetic rows initially and revealed the final catalog row through `FlatList` scrolling. Desktop and mobile screenshots showed no overlap or blank catalog state.
+- Measured Edit and Delete controls were both exactly 44x44 CSS pixels.
+- Source audit found no `onPressIn`, retained both raw DOM web delete branches, found no screen declarations in `App.tsx`, and confirmed the moved classification cluster is verbatim apart from exports.
+
+Flags / Roadblocks:
+
+- Native iOS/Android validation and native speech recognition were unavailable. Voice search remains wired through `useVoiceSearch`, but native transcript population is not claimed as passed.
+- A pre-existing classifier issue was spotted and deliberately not fixed: canonical brand normalization can add accents (for example `Água das Pedras`) before `removeDetectedBrand` applies a case-insensitive but accent-sensitive regular expression to unaccented input, leaving the brand text in the product name.
+
+Next recommended step:
+
+- Commit and push this green 8b extraction, then request Claude's next contract before beginning another split.
+
+Signed-off-by: Codex <codex@openai.com>

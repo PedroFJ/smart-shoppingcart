@@ -1,1 +1,55 @@
-{}
+{
+  "tabTitle": "Adicionar",
+  "filter": {
+    "all": "Tudo"
+  },
+  "search": {
+    "label": "Procurar para adicionar",
+    "placeholder": "Nome, marca ou nota"
+  },
+  "voice": {
+    "label": "Pesquisar por voz",
+    "hint": "Usa a voz para pesquisar no catálogo de produtos"
+  },
+  "newProduct": {
+    "open": "Produto novo",
+    "title": "Produto novo",
+    "close": "Fechar produto novo",
+    "nameLabel": "Nome",
+    "namePlaceholder": "Nome do produto",
+    "quantityLabel": "Quantidade",
+    "quantityPlaceholder": "1 un",
+    "noteLabel": "Nota",
+    "notePlaceholder": "Nota opcional",
+    "create": "Adicionar"
+  },
+  "editProduct": {
+    "title": "Editar produto",
+    "close": "Fechar editor do produto",
+    "notFound": "Este produto já não existe no catálogo.",
+    "nameLabel": "Nome",
+    "quantityLabel": "Quantidade",
+    "brandLabel": "Marca",
+    "sectionLabel": "Departamento",
+    "noteLabel": "Nota",
+    "save": "Guardar"
+  },
+  "catalog": {
+    "add": "Adicionar",
+    "noteLabel": "Nota",
+    "noNote": "Sem nota",
+    "alternatives": "Alternativas OK",
+    "exact": "Marca exata",
+    "edit": "Editar",
+    "delete": "Apagar"
+  },
+  "delete": {
+    "confirm": "Apagar mesmo",
+    "cancelSymbol": "X"
+  },
+  "common": {
+    "closeSymbol": "X",
+    "cancel": "Cancelar"
+  },
+  "empty": "Não há produtos para adicionar neste departamento."
+}

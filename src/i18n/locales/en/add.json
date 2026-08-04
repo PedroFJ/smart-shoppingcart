@@ -1,1 +1,55 @@
-{}
+{
+  "tabTitle": "Add",
+  "filter": {
+    "all": "All"
+  },
+  "search": {
+    "label": "Search products to add",
+    "placeholder": "Name, brand, or note"
+  },
+  "voice": {
+    "label": "Search by voice",
+    "hint": "Uses your voice to search the product catalog"
+  },
+  "newProduct": {
+    "open": "New product",
+    "title": "New product",
+    "close": "Close new product",
+    "nameLabel": "Name",
+    "namePlaceholder": "Product name",
+    "quantityLabel": "Quantity",
+    "quantityPlaceholder": "1 unit",
+    "noteLabel": "Note",
+    "notePlaceholder": "Optional note",
+    "create": "Add"
+  },
+  "editProduct": {
+    "title": "Edit product",
+    "close": "Close product editor",
+    "notFound": "This product is no longer in the catalog.",
+    "nameLabel": "Name",
+    "quantityLabel": "Quantity",
+    "brandLabel": "Brand",
+    "sectionLabel": "Department",
+    "noteLabel": "Note",
+    "save": "Save"
+  },
+  "catalog": {
+    "add": "Add",
+    "noteLabel": "Note",
+    "noNote": "No note",
+    "alternatives": "Alternatives OK",
+    "exact": "Exact brand",
+    "edit": "Edit",
+    "delete": "Delete"
+  },
+  "delete": {
+    "confirm": "Delete now",
+    "cancelSymbol": "X"
+  },
+  "common": {
+    "closeSymbol": "X",
+    "cancel": "Cancel"
+  },
+  "empty": "There are no products to add in this department."
+}

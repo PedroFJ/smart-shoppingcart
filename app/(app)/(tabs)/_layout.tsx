@@ -7,6 +7,7 @@ export default function TabsLayout() {
   return (
     <Tabs screenOptions={{ headerShown: false }}>
       <Tabs.Screen name="list" options={{ title: t("list:tabTitle") }} />
+      <Tabs.Screen name="add" options={{ title: t("add:tabTitle") }} />
       <Tabs.Screen name="shop" options={{ title: t("shop:tabTitle") }} />
     </Tabs>
   );
