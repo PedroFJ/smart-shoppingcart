@@ -1,1 +1,48 @@
-{}
+{
+  "headerTitle": "List",
+  "shoppingDone": {
+    "title": "Shopping done",
+    "body": "The List was updated with the products left to pick.",
+    "clear": "Clear"
+  },
+  "filter": {
+    "all": "All",
+    "ariaLabel": "Filter by department"
+  },
+  "search": {
+    "placeholder": "Search the list",
+    "ariaLabel": "Search the list"
+  },
+  "voice": {
+    "label": "Voice search",
+    "hint": "Tap to start or stop voice search."
+  },
+  "empty": {
+    "noItems": "The List is empty. Use Add to choose only what you want to buy.",
+    "noVisible": "No products match this view. Clear the search or choose another department.",
+    "clearFilters": "Clear filters"
+  },
+  "row": {
+    "alternatives": {
+      "label": "Allow alternatives",
+      "hint": "Allows picking a similar product if this one is missing."
+    },
+    "quantity": {
+      "label": "Qty",
+      "placeholder": "1 unit",
+      "ariaLabel": "Quantity"
+    },
+    "note": {
+      "label": "Note",
+      "placeholder": "Note",
+      "ariaLabel": "Product note"
+    },
+    "lastPicked": {
+      "never": "Last purchase: never",
+      "unknown": "Last purchase: unknown",
+      "value": "Last purchase: {{date}}"
+    },
+    "postpone": "Postpone",
+    "postponeHint": "Moves this product out of the current List."
+  }
+}

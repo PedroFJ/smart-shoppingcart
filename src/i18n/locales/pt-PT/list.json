@@ -1,1 +1,48 @@
-{}
+{
+  "headerTitle": "Lista",
+  "shoppingDone": {
+    "title": "Compra terminada",
+    "body": "A Lista já foi atualizada com os produtos que ficaram por apanhar.",
+    "clear": "Limpar"
+  },
+  "filter": {
+    "all": "Tudo",
+    "ariaLabel": "Filtrar por departamento"
+  },
+  "search": {
+    "placeholder": "Procurar na lista",
+    "ariaLabel": "Procurar na lista"
+  },
+  "voice": {
+    "label": "Pesquisa por voz",
+    "hint": "Toca para iniciar ou parar a pesquisa por voz."
+  },
+  "empty": {
+    "noItems": "A Lista está vazia. Use Adicionar para escolher só o que quer comprar.",
+    "noVisible": "Não há produtos nesta vista. Limpe a pesquisa ou escolha outro departamento.",
+    "clearFilters": "Limpar filtros"
+  },
+  "row": {
+    "alternatives": {
+      "label": "Aceitar alternativas",
+      "hint": "Permite escolher um produto semelhante se este faltar."
+    },
+    "quantity": {
+      "label": "Qtd",
+      "placeholder": "1 un",
+      "ariaLabel": "Quantidade"
+    },
+    "note": {
+      "label": "Nota",
+      "placeholder": "Nota",
+      "ariaLabel": "Nota do produto"
+    },
+    "lastPicked": {
+      "never": "Última compra: nunca",
+      "unknown": "Última compra: desconhecida",
+      "value": "Última compra: {{date}}"
+    },
+    "postpone": "Adiar",
+    "postponeHint": "Move este produto para fora da Lista atual."
+  }
+}

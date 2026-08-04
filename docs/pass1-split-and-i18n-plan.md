@@ -826,3 +826,47 @@ Next recommended step:
 - Re-anchor and execute Commit 6 from `docs/commit-6-list-brief.md`; it remains deferred until Commit 5.6 is landed.
 
 Signed-off-by: Codex <codex@openai.com>
+
+### 2026-08-04 Europe/Lisbon - Codex - Pass 1 commit 6 (List)
+
+Status: Commit 6 implementation complete in `C:\Users\PedroFreire\dev\smart-shoppingcart`. The List screen now lives at `app/(app)/(tabs)/list.tsx` under a one-tab Expo Router Tabs shell, while the `App.tsx` `screen === "list"` branch redirects to `/list`. Add, Shop, Summary, Welcome, and Settings remain in their existing scopes.
+
+Completed:
+
+- Added `app/(app)/(tabs)/_layout.tsx` with the visible `Lista` tab and `app/(app)/(tabs)/list.tsx` as the extracted List route.
+- Moved `useVoiceSearch` into `src/hooks/useVoiceSearch.ts`; it now reads `useSettingsStore.locale` instead of hard-coding `pt-PT`.
+- Moved `VoiceSearchButton` into `src/ui/components/VoiceSearchButton.tsx` and added button accessibility label/hint support.
+- Added shopping-list store completion actions: `clearShoppingDoneNotice`, `updateItemStatus`, `toggleAcceptsAlternatives`, `updateItemNote`, and `updateItemQuantity`, plus `selectNeededItems`.
+- Wired the extracted List route to `useShoppingListStore` for list item state and `useSettingsStore` for `departmentFilter`, `listSearch`, and `voiceSearchEnabled`, respecting the Commit 5.5 ownership change.
+- Populated `src/i18n/locales/pt-PT/list.json` and `src/i18n/locales/en/list.json`.
+- Removed the old embedded `ListScreen` function and old List-only styles from `App.tsx`, while preserving styles still used by Add, Shop, Summary, and Welcome.
+
+Validation:
+
+- Pre-flight on current `origin/master` passed before edits: `git pull --ff-only origin master`, clean `git status`, `npm.cmd run typecheck`, and `npm.cmd run i18n:check`.
+- Final `npm.cmd run typecheck` passed.
+- Additional route-focused typecheck passed because the repo `tsconfig.json` currently scopes the standard check to `App.tsx` and `src`: `npx.cmd tsc --noEmit --pretty false --strict --jsx react-jsx --moduleResolution bundler --module esnext --target esnext --skipLibCheck --baseUrl . --esModuleInterop "app/(app)/(tabs)/list.tsx"`.
+- Final `npm.cmd run i18n:check` passed with zero plain JSX text nodes in `app/(app)/(tabs)/list.tsx`.
+- `npx.cmd expo export --platform web --clear --output-dir dist-router-smoke` passed; the temporary export folder was deleted.
+- Headless Edge smoke against the exported web build passed:
+- 7.1 Navigation in: `/list` loaded with seeded current items and only departments present in the list.
+- 7.2 UX-issue-5 fix: tapping the product-info row body did not toggle alternatives; the native Switch toggled alternatives and persisted the store value.
+- 7.3 Quantity and note: quantity edit normalized on blur and persisted; note edit persisted.
+- 7.4 Adiar: the row moved to `skipped`, left the visible list, and persisted after the store update.
+- 7.5 Search and filter: no-match search rendered the empty state and `Limpar filtros` cleared the view.
+- 7.6 Voice search: the mic button rendered when `voiceSearchEnabled = true` and disappeared after settings were persisted with it disabled.
+- 7.7 Compra terminada notice: the notice rendered from store state and `Limpar` cleared and persisted it.
+- 7.8 Navigation out: the root App route and Settings route remained reachable after leaving `/list`.
+- 7.9 Welcome and Settings regressions: Welcome rendered from clean storage; Settings had rendered in the navigation smoke.
+
+Flags / Roadblocks:
+
+- iOS and Android manual validation were not available in this execution environment.
+- The web smoke server again rewrote Expo's exported script tag to `type="module"` for local static validation because the real Zustand middleware bundle contains `import.meta`; the standard export command itself passed unchanged.
+- The temporary smoke harness used seeded web storage and direct DOM events for compact validation, then was deleted before commit.
+
+Next recommended step:
+
+- Continue with the next split commit from the current plan after confirming Claude's latest contract.
+
+Signed-off-by: Codex <codex@openai.com>

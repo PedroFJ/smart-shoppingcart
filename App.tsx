@@ -13,13 +13,14 @@ import {
   View,
   ViewStyle
 } from "react-native";
-import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from "expo-speech-recognition";
 import { Redirect } from "expo-router";
 import { defaultItinerary, Product, SectionId, sections, starterProducts } from "./src/data/sampleData";
 import { inferSectionRoute, PickEvent, sortByRoute } from "./src/domain/routeInference";
 import { isSavedAtNewer } from "./src/domain/savedAt";
+import { useVoiceSearch } from "./src/hooks/useVoiceSearch";
 import { getDeviceLocalStorage, LocalStorageLike } from "./src/lib/deviceStorage";
 import { defaultSyncSpaceId, isSupabaseConfigured, supabase } from "./src/lib/supabase";
+import { VoiceSearchButton } from "./src/ui/components/VoiceSearchButton";
 
 type Screen = "welcome" | "list" | "add" | "shop" | "settings" | "summary";
 type MainScreen = Exclude<Screen, "summary">;
@@ -99,7 +100,6 @@ const SYNC_CLIENT_ID_KEY = "smart-shoppingcart:sync-client-id";
 const SYNC_SPACE_ID_KEY = "smart-shoppingcart:sync-space-id";
 const CURRENT_STORAGE_VERSION = 2;
 const CART_DRAG_STEP = 86;
-const VOICE_SEARCH_LOCALE = "pt-PT";
 const searchStopWords = new Set(["a", "as", "o", "os", "de", "da", "das", "do", "dos", "e", "the", "of", "for"]);
 const androidStatusBarInset = Platform.OS === "android" ? (StatusBar.currentHeight ?? 24) : 0;
 const androidNavigationBarInset = Platform.OS === "android" ? 24 : 0;
@@ -986,22 +986,7 @@ export default function App() {
         <View style={styles.contentArea}>
         {screen === "welcome" && <Redirect href="/welcome" />}
 
-        {screen === "list" && (
-          <ListScreen
-            items={neededItems}
-            departmentFilter={departmentFilter}
-            onChangeDepartmentFilter={updateDepartmentFilter}
-            searchText={listSearch}
-            onChangeSearchText={updateListSearch}
-            shoppingDoneNotice={shoppingDoneNotice}
-            onClearShoppingDoneNotice={() => setShoppingDoneNotice(false)}
-            onRemove={(productId) => updateItemStatus(productId, "skipped")}
-            onToggleAlternatives={toggleAcceptsAlternatives}
-            onChangeNote={updateItemNote}
-            onChangeQuantity={updateItemQuantity}
-            voiceSearchEnabled={localUserSettings.voiceSearchEnabled}
-          />
-        )}
+        {screen === "list" && <Redirect href="/list" />}
 
         {screen === "add" && (
           <AddScreen
@@ -1138,121 +1123,6 @@ function getSyncPillStyle(syncStatus: SyncStatus): TextStyle {
   return styles.syncPill_local;
 }
 
-function useVoiceSearch({
-  contextualStrings,
-  enabled,
-  onTranscript
-}: {
-  contextualStrings: string[];
-  enabled: boolean;
-  onTranscript: (transcript: string) => void;
-}) {
-  const [isListening, setIsListening] = useState(false);
-  const [isAvailable, setIsAvailable] = useState(true);
-
-  useEffect(() => {
-    if (!enabled) {
-      try {
-        ExpoSpeechRecognitionModule.stop();
-      } catch {
-        // Voice search can be unavailable on web or older builds.
-      }
-      setIsListening(false);
-      return;
-    }
-
-    try {
-      setIsAvailable(ExpoSpeechRecognitionModule.isRecognitionAvailable());
-    } catch {
-      setIsAvailable(false);
-    }
-  }, [enabled]);
-
-  useSpeechRecognitionEvent("start", () => setIsListening(true));
-  useSpeechRecognitionEvent("end", () => setIsListening(false));
-  useSpeechRecognitionEvent("result", (event) => {
-    const transcript = event.results[0]?.transcript.trim();
-
-    if (transcript) {
-      onTranscript(transcript);
-    }
-
-    if (event.isFinal && Platform.OS === "web") {
-      ExpoSpeechRecognitionModule.stop();
-    }
-  });
-  useSpeechRecognitionEvent("error", () => {
-    setIsListening(false);
-  });
-
-  async function toggle() {
-    if (isListening) {
-      ExpoSpeechRecognitionModule.stop();
-      return;
-    }
-
-    try {
-      if (!ExpoSpeechRecognitionModule.isRecognitionAvailable()) {
-        setIsAvailable(false);
-        return;
-      }
-
-      const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
-
-      if (!permission.granted) {
-        setIsListening(false);
-        setIsAvailable(false);
-        return;
-      }
-
-      ExpoSpeechRecognitionModule.start({
-        lang: VOICE_SEARCH_LOCALE,
-        interimResults: true,
-        continuous: true,
-        maxAlternatives: 1,
-        contextualStrings: contextualStrings.slice(0, 80),
-        androidIntentOptions: {
-          EXTRA_LANGUAGE_MODEL: "web_search"
-        },
-        iosTaskHint: "search"
-      });
-    } catch {
-      setIsListening(false);
-      setIsAvailable(false);
-    }
-  }
-
-  return {
-    isAvailable,
-    isListening,
-    toggle
-  };
-}
-
-function VoiceSearchButton({
-  isListening,
-  onPress
-}: {
-  isListening: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <TouchableOpacity
-      style={[
-        styles.voiceSearchButton,
-        isListening && styles.voiceSearchButtonActive
-      ]}
-      onPress={onPress}
-    >
-      <View style={styles.microphoneIcon}>
-        <View style={[styles.microphoneHead, isListening && styles.microphoneIconActive]} />
-        <View style={[styles.microphoneStem, isListening && styles.microphoneIconActive]} />
-        <View style={[styles.microphoneBase, isListening && styles.microphoneIconActive]} />
-      </View>
-    </TouchableOpacity>
-  );
-}
-
 function NavigationTabs({
   activeScreen,
   listCount,
@@ -1308,177 +1178,6 @@ function NavigationTabs({
         );
       })}
     </ScrollView>
-  );
-}
-
-function ListScreen({
-  items,
-  departmentFilter,
-  onChangeDepartmentFilter,
-  searchText,
-  onChangeSearchText,
-  shoppingDoneNotice,
-  onClearShoppingDoneNotice,
-  onRemove,
-  onToggleAlternatives,
-  onChangeNote,
-  onChangeQuantity,
-  voiceSearchEnabled
-}: {
-  items: ShoppingItem[];
-  departmentFilter: DepartmentFilter;
-  onChangeDepartmentFilter: (filter: DepartmentFilter) => void;
-  searchText: string;
-  onChangeSearchText: (value: string) => void;
-  shoppingDoneNotice: boolean;
-  onClearShoppingDoneNotice: () => void;
-  onRemove: (productId: string) => void;
-  onToggleAlternatives: (productId: string) => void;
-  onChangeNote: (productId: string, note: string) => void;
-  onChangeQuantity: (productId: string, quantity: string) => void;
-  voiceSearchEnabled: boolean;
-}) {
-  const availableDepartments = sections.filter((section) => {
-    return items.some((item) => item.sectionId === section.id);
-  });
-  const effectiveDepartmentFilter = departmentFilter === "all" || availableDepartments.some((section) => section.id === departmentFilter)
-    ? departmentFilter
-    : "all";
-  const departmentItems = effectiveDepartmentFilter === "all"
-    ? items
-    : items.filter((item) => item.sectionId === effectiveDepartmentFilter);
-  const visibleItems = filterBySearch(departmentItems, searchText);
-  const isListEmpty = items.length === 0;
-  const listVoiceSearch = useVoiceSearch({
-    contextualStrings: items.map((item) => item.name),
-    enabled: voiceSearchEnabled,
-    onTranscript: onChangeSearchText
-  });
-
-  return (
-    <View style={styles.screen}>
-      {shoppingDoneNotice && (
-        <View style={styles.shoppingDoneNotice}>
-          <View style={styles.shoppingDoneTextColumn}>
-            <Text style={styles.shoppingDoneTitle}>Compra terminada</Text>
-            <Text style={styles.shoppingDoneText}>A Lista já foi atualizada com os produtos que ficaram por apanhar.</Text>
-          </View>
-          <TouchableOpacity style={styles.noticeClearButton} onPress={onClearShoppingDoneNotice}>
-            <Text style={styles.noticeClearButtonText}>Limpar</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        alwaysBounceHorizontal
-        directionalLockEnabled
-        contentContainerStyle={styles.filterBar}
-        style={styles.filterRail}
-      >
-        <TouchableOpacity
-          style={[styles.filterButton, effectiveDepartmentFilter === "all" && styles.filterButtonActive]}
-          onPress={() => onChangeDepartmentFilter("all")}
-        >
-          <Text style={[styles.filterText, effectiveDepartmentFilter === "all" && styles.filterTextActive]}>
-            Tudo
-          </Text>
-        </TouchableOpacity>
-        {availableDepartments.map((section) => (
-          <TouchableOpacity
-            key={section.id}
-            style={[styles.filterButton, effectiveDepartmentFilter === section.id && styles.filterButtonActive]}
-            onPress={() => onChangeDepartmentFilter(section.id)}
-          >
-            <Text style={[styles.filterText, effectiveDepartmentFilter === section.id && styles.filterTextActive]}>
-              {section.name}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-
-      <View style={styles.searchBox}>
-        <TextInput
-          style={[styles.searchInput, webSearchInputChromeReset]}
-          value={searchText}
-          onChangeText={onChangeSearchText}
-          placeholder="Procurar na lista"
-        />
-        {voiceSearchEnabled && listVoiceSearch.isAvailable && (
-          <VoiceSearchButton
-            isListening={listVoiceSearch.isListening}
-            onPress={listVoiceSearch.toggle}
-          />
-        )}
-      </View>
-
-      <ScrollView contentContainerStyle={styles.listContent}>
-        {isListEmpty && (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>A Lista está vazia. Use Adicionar para escolher só o que quer comprar.</Text>
-          </View>
-        )}
-        {!isListEmpty && visibleItems.length === 0 && (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>Não há produtos nesta vista. Limpe a pesquisa ou escolha outro departamento.</Text>
-            <TouchableOpacity
-              style={styles.secondaryButtonFull}
-              onPress={() => {
-                onChangeDepartmentFilter("all");
-                onChangeSearchText("");
-              }}
-            >
-              <Text style={styles.secondaryButtonText}>Limpar filtros</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-        {visibleItems.map((item) => (
-          <View key={item.id} style={[styles.itemCard, getSectionCardStyle(item.sectionId)]}>
-            <TouchableOpacity style={styles.itemColumn} onPress={() => onToggleAlternatives(item.id)}>
-              <View>
-                <Text style={styles.itemName}>{item.name}</Text>
-                <Text style={styles.itemMeta}>{formatListItemDetails(item)}</Text>
-                <Text style={styles.lastPickedText}>{formatLastPicked(item.lastPickedAt)}</Text>
-                <Text style={[styles.preferencePill, item.acceptsAlternatives ? styles.preferenceOpen : styles.preferenceExact]}>
-                  {item.acceptsAlternatives ? "Alternativas OK" : "Marca exata"}
-                </Text>
-              </View>
-            </TouchableOpacity>
-            <View style={styles.quantityColumn}>
-              <View style={styles.quantityHeader}>
-                <Text style={styles.fieldLabel}>Qtd</Text>
-              </View>
-              <TextInput
-                style={styles.quantityInput}
-                value={item.quantity}
-                onChangeText={(quantity) => onChangeQuantity(item.id, quantity)}
-                onBlur={() => onChangeQuantity(item.id, normalizeQuantityText(item.quantity))}
-                onEndEditing={(event) => onChangeQuantity(item.id, normalizeQuantityText(event.nativeEvent.text))}
-                onSubmitEditing={(event) => onChangeQuantity(item.id, normalizeQuantityText(event.nativeEvent.text))}
-                placeholder="1 un"
-              />
-            </View>
-            <View style={styles.noteColumn}>
-              <View style={styles.noteHeader}>
-                <Text style={styles.fieldLabel}>Nota</Text>
-                <TouchableOpacity style={styles.listPostponeAction} onPress={() => onRemove(item.id)}>
-                  <Text style={styles.rowAction}>Adiar</Text>
-                </TouchableOpacity>
-              </View>
-              <TextInput
-                style={styles.noteInput}
-                value={item.note ?? ""}
-                onChangeText={(note) => onChangeNote(item.id, note)}
-                placeholder="Nota"
-                placeholderTextColor="#596579"
-                multiline
-              />
-            </View>
-          </View>
-        ))}
-      </ScrollView>
-    </View>
   );
 }
 
@@ -3833,46 +3532,6 @@ const styles = StyleSheet.create({
   welcomeActions: {
     gap: 10
   },
-  shoppingDoneNotice: {
-    alignItems: "center",
-    backgroundColor: "#FFF4D6",
-    borderColor: "#B98200",
-    borderRadius: 8,
-    borderWidth: 1,
-    flexDirection: "row",
-    gap: 12,
-    marginBottom: 12,
-    padding: 12
-  },
-  shoppingDoneTextColumn: {
-    flex: 1,
-    gap: 2
-  },
-  shoppingDoneTitle: {
-    color: "#4C3200",
-    fontSize: 16,
-    fontWeight: "900"
-  },
-  shoppingDoneText: {
-    color: "#5C4510",
-    fontSize: 14,
-    fontWeight: "700",
-    lineHeight: 20
-  },
-  noticeClearButton: {
-    alignItems: "center",
-    backgroundColor: "#7A4F00",
-    borderRadius: 8,
-    justifyContent: "center",
-    minHeight: 40,
-    minWidth: 72,
-    paddingHorizontal: 10
-  },
-  noticeClearButtonText: {
-    color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "900"
-  },
   filterBar: {
     alignItems: "center",
     gap: 8,
@@ -4084,44 +3743,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "900"
   },
-  voiceSearchButton: {
-    minHeight: 44,
-    minWidth: 36,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 8
-  },
-  voiceSearchButtonActive: {
-    opacity: 0.75
-  },
-  microphoneIcon: {
-    alignItems: "center",
-    height: 26,
-    justifyContent: "center",
-    width: 20
-  },
-  microphoneHead: {
-    width: 12,
-    height: 16,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: "#12616F"
-  },
-  microphoneStem: {
-    width: 2,
-    height: 6,
-    backgroundColor: "#12616F"
-  },
-  microphoneBase: {
-    width: 14,
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: "#12616F"
-  },
-  microphoneIconActive: {
-    borderColor: "#A33E22",
-    backgroundColor: "#A33E22"
-  },
   primaryButton: {
     flex: 1,
     minHeight: 58,
@@ -4189,20 +3810,6 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingBottom: 24
   },
-  itemCard: {
-    borderRadius: 8,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#D8DEE8",
-    flexDirection: "row",
-    gap: 10,
-    minHeight: 112,
-    padding: 12
-  },
-  itemColumn: {
-    flex: 1.15,
-    justifyContent: "center"
-  },
   itemName: {
     color: "#18212F",
     fontSize: 19,
@@ -4242,31 +3849,6 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
     justifyContent: "center"
   },
-  listPostponeAction: {
-    alignItems: "flex-end",
-    justifyContent: "center",
-    minHeight: 44,
-    paddingLeft: 12
-  },
-  quantityColumn: {
-    width: 82,
-    gap: 6,
-    justifyContent: "flex-start"
-  },
-  quantityHeader: {
-    minHeight: 36,
-    justifyContent: "center"
-  },
-  noteColumn: {
-    flex: 1,
-    gap: 6
-  },
-  noteHeader: {
-    minHeight: 36,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between"
-  },
   sortButton: {
     width: 48,
     minHeight: 48,
@@ -4293,26 +3875,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "900",
     textTransform: "uppercase"
-  },
-  quantityInput: {
-    height: 66,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#B8C2D1",
-    color: "#18212F",
-    fontSize: 16,
-    fontWeight: "800",
-    paddingHorizontal: 12
-  },
-  noteInput: {
-    height: 66,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#B8C2D1",
-    color: "#18212F",
-    fontSize: 17,
-    padding: 12,
-    textAlignVertical: "top"
   },
   catalogCard: {
     width: "100%",
