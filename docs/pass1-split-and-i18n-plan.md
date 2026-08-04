@@ -957,3 +957,43 @@ Next recommended step:
 - Commit and push this green 7a baseline before starting Commit 7b, as required by `docs/commit-7-shop-brief.md`.
 
 Signed-off-by: Codex <codex@openai.com>
+### 2026-08-04 Europe/Lisbon - Codex - Commit 7b Shop, route editor, and Summary routes
+
+Status: Commit 7b implementation complete in `C:\Users\PedroFreire\dev\smart-shoppingcart`. Shop is now a Tabs route, its route editor is modal-presented, Summary is a route in the same Shop stack, and the monolith retains only redirects for `shop` and `summary`.
+
+Completed:
+
+- Added `app/(app)/(tabs)/shop.tsx`, `app/(app)/shop/_layout.tsx`, `app/(app)/shop/route-editor.tsx`, and `app/(app)/shop/summary.tsx`; registered Shop beside List without adding a `[storeId]` segment.
+- Added `src/hooks/useTripLifecycle.ts` as the single owner of cross-store cart, ordering, undo, checkout, route-save, and finalization mutations.
+- Chose a distinct `markCartItemStatus` lifecycle action for the cart. The existing `shoppingListStore.updateItemStatus` remains List-only and unchanged; using it in the cart would omit product quantity/timestamp updates and `pickEvents`, silently breaking route learning.
+- Wired persisted checkout confirmation through `tripStore.isCheckoutLocked` and `lockedPickingIds`, while retaining the two-step web/native platform fork, 4-second timeout, and native `onPress`-only confirmation.
+- Kept screen-local state limited to Responder drag interaction. All selected-store, route, cart, undo, checkout, and Summary data comes from the existing Zustand stores.
+- Preserved the inline undo control, `Falta`, all three Summary exits, selected-store-only route saving, and the specified 48x48 arrow and 102x48 cart action targets.
+- Populated `shop.json` and `summary.json` in pt-PT and English, and added localized List/Shop tab titles.
+- Removed the embedded `ShopScreen`, `SummaryScreen`, `getConfidenceBand`, and duplicate trip handlers from `App.tsx`; the corresponding branches now redirect to `/shop` and `/shop/summary`.
+
+Validation:
+
+- `npm.cmd run typecheck` passed.
+- `npm.cmd run i18n:check` passed with zero plain JSX text nodes.
+- `npx.cmd expo export --platform web --clear` passed. The exported HTML retained a classic deferred script, used no module script, and the bundle contained zero `import.meta` occurrences.
+- Headless Edge served the generated `dist` files byte-for-byte with no HTML or JavaScript transformation and reported zero runtime or console errors.
+- Cart order smoke passed with both an arrow reorder and an actual pointer drag through the retained Responder API; each persisted to `storeProductOrders`.
+- Pick/undo smoke passed: `Apanhado` stamped the product timestamp and appended a pick event; undo restored item status and product `lastPickedAt` and removed the event.
+- The modal route editor reordered SuperCor stops, cleared the manual product override, and immediately changed cart order. Switching to Continente changed cart order to that store's route.
+- Checkout reload smoke passed: the confirmation lock and three active trip IDs survived reload through `tripStore`, and confirming after reload reached Summary with all three pick events and a confidence band.
+- The checkout confirmation expired after four seconds and cleared the persisted lock. After saving a learned Continente route, a fresh trip with no manual product override opened in that saved order.
+- Summary `Voltar ao carrinho` returned without clearing picks. `Terminar sem guardar` finalized without changing the selected store route. `Guardar percurso` updated only `storeItineraries[selectedStoreId]`; the global `routesStore.itinerary` remained unchanged.
+- `Falta` remained undoable and returned to the next list as `needed`; a trip with only `Falta` skipped Summary. Finalization reached the extracted List and rendered its shopping-done notice.
+- Commit 7a finding retained: `buildNextShoppingList` is pure and closes over no component state. The locale-aware List sorter remains deliberately unreconciled.
+- Temporary browser harness and profile files were removed after validation.
+
+Flags / Roadblocks:
+
+- Native device/simulator validation was unavailable. The native branch was source-checked for `onPress` without `onPressIn`, but iOS and Android interaction is not claimed as passed.
+
+Next recommended step:
+
+- Commit and push this green 7b baseline, then request Claude's next contract before beginning Commit 8.
+
+Signed-off-by: Codex <codex@openai.com>

@@ -15,22 +15,15 @@ import {
 } from "react-native";
 import { Redirect } from "expo-router";
 import { defaultItinerary, Product, SectionId, sections, starterProducts } from "./src/data/sampleData";
-import { inferSectionRoute, PickEvent, sortByRoute } from "./src/domain/routeInference";
+import { PickEvent, sortByRoute } from "./src/domain/routeInference";
 import {
-  CART_DRAG_STEP,
-  clampIndex,
   completeSectionRoute,
   completeStoreStopOrder,
   defaultSupercorStopOrder,
-  getRouteEditorItems,
-  getStoreStopName,
-  getSupercorRouteStopId,
   isSupercorStopId,
-  sortPickingItems,
   sortShoppingItems
 } from "./src/domain/routeOrdering";
 import { isSavedAtNewer } from "./src/domain/savedAt";
-import { buildNextShoppingList } from "./src/domain/tripList";
 import { useVoiceSearch } from "./src/hooks/useVoiceSearch";
 import { getDeviceLocalStorage, LocalStorageLike } from "./src/lib/deviceStorage";
 import { defaultSyncSpaceId, isSupabaseConfigured, supabase } from "./src/lib/supabase";
@@ -297,7 +290,6 @@ export default function App() {
     return initialAppState?.shoppingItems ?? createInitialShoppingList(initialAppState?.products ?? starterProducts);
   });
   const [pickEvents, setPickEvents] = useState<PickEvent<SectionId>[]>(() => initialAppState?.pickEvents ?? []);
-  const [lastChange, setLastChange] = useState<ShoppingItem | null>(null);
   const [departmentFilter, setDepartmentFilter] = useState<DepartmentFilter>(() => localUserSettings.departmentFilter);
   const [listSearch, setListSearch] = useState(() => localUserSettings.listSearch);
   const [addSearch, setAddSearch] = useState(() => localUserSettings.addSearch);
@@ -460,19 +452,12 @@ export default function App() {
   const neededItems = useMemo(() => {
     return sortShoppingItems(shoppingItems.filter((item) => item.status === "needed"), defaultItinerary);
   }, [shoppingItems]);
-  const selectedStore = supermarketProfiles.find((store) => store.id === selectedStoreId) ?? supermarketProfiles[0];
-  const selectedStoreRoute = storeItineraries[selectedStoreId] ?? defaultItinerary;
-  const selectedStoreStopOrder = storeStopOrders[selectedStoreId] ?? defaultSupercorStopOrder;
-  const pickingItems = useMemo(() => {
-    return sortPickingItems(neededItems, selectedStoreId, selectedStoreRoute, selectedStoreStopOrder, storeProductOrders[selectedStoreId]);
-  }, [neededItems, selectedStoreId, selectedStoreRoute, selectedStoreStopOrder, storeProductOrders]);
   const listProductIds = useMemo(() => new Set(neededItems.map((item) => item.id)), [neededItems]);
   const addableProductCount = useMemo(() => {
     return products.filter((product) => !listProductIds.has(product.id)).length;
   }, [listProductIds, products]);
 
   const progress = shoppingItems.filter((item) => item.status !== "needed").length;
-  const inferredRoute = useMemo(() => inferSectionRoute(pickEvents, selectedStoreRoute), [pickEvents, selectedStoreRoute]);
   const isCompactLayout = width < 700 || height < 760;
 
   function createPersistedAppState(): PersistedAppState {
@@ -628,60 +613,6 @@ export default function App() {
     setPickEvents((current) => current.filter((event) => event.productId !== productId));
   }
 
-  function updateItemStatus(productId: string, status: ListStatus) {
-    const item = shoppingItems.find((currentItem) => currentItem.id === productId);
-    const pickedAt = status === "picked" ? new Date().toISOString() : undefined;
-    const pickedQuantity = normalizeQuantityText(item?.quantity || item?.defaultQuantity || "1 un");
-
-    if (!item) {
-      return;
-    }
-
-    setLastChange(item);
-    setShoppingItems((current) => {
-      return current.map((currentItem) => {
-        return currentItem.id === productId
-          ? { ...currentItem, status, lastPickedAt: pickedAt ?? currentItem.lastPickedAt }
-          : currentItem;
-      });
-    });
-
-    if (pickedAt) {
-      setProducts((current) => {
-        const nextProducts = current.map((product) => {
-          return product.id === productId
-            ? { ...product, defaultQuantity: pickedQuantity, lastPickedAt: pickedAt }
-            : product;
-        });
-
-        if (nextProducts.some((product) => product.id === productId)) {
-          return nextProducts;
-        }
-
-        return [
-          ...nextProducts,
-          {
-            ...productFromShoppingItem(item),
-            defaultQuantity: pickedQuantity,
-            lastPickedAt: pickedAt
-          }
-        ];
-      });
-    }
-
-    if (status !== "needed") {
-      setPickEvents((current) => [
-        ...current,
-        {
-          productId: item.id,
-          sectionId: item.sectionId,
-          pickedAt: Date.now(),
-          action: status === "picked" ? "picked" : status
-        }
-      ]);
-    }
-  }
-
   function toggleAcceptsAlternatives(productId: string) {
     setShoppingItems((current) => {
       return current.map((item) => {
@@ -708,222 +639,8 @@ export default function App() {
     });
   }
 
-  function movePickingItem(productId: string, direction: "up" | "down", visibleItemIds: string[]) {
-    const sourceIndex = visibleItemIds.indexOf(productId);
-    const targetIndex = direction === "up" ? sourceIndex - 1 : sourceIndex + 1;
-
-    if (sourceIndex < 0 || targetIndex < 0 || targetIndex >= visibleItemIds.length) {
-      return;
-    }
-
-    const nextOrder = [...visibleItemIds];
-    const [movedProductId] = nextOrder.splice(sourceIndex, 1);
-    nextOrder.splice(targetIndex, 0, movedProductId);
-
-    setStoreProductOrders((current) => {
-      return {
-        ...current,
-        [selectedStoreId]: nextOrder
-      };
-    });
-    updateSelectedStoreRouteFromProductOrder(nextOrder);
-  }
-
-  function reorderPickingItem(productId: string, targetVisibleIndex: number, visibleItemIds: string[]) {
-    const sourceIndex = visibleItemIds.indexOf(productId);
-    const targetIndex = clampIndex(targetVisibleIndex, 0, visibleItemIds.length - 1);
-
-    if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) {
-      return;
-    }
-
-    const nextOrder = [...visibleItemIds];
-    const [movedProductId] = nextOrder.splice(sourceIndex, 1);
-    nextOrder.splice(targetIndex, 0, movedProductId);
-
-    setStoreProductOrders((current) => {
-      return {
-        ...current,
-        [selectedStoreId]: nextOrder
-      };
-    });
-    updateSelectedStoreRouteFromProductOrder(nextOrder);
-  }
-
-  function updateSelectedStoreRouteFromProductOrder(productOrder: string[]) {
-    const itemById = new Map(pickingItems.map((item) => [item.id, item]));
-    if (selectedStoreId === "supercor") {
-      const cartStopOrder = productOrder
-        .map((productId) => {
-          const item = itemById.get(productId);
-          return item ? getSupercorRouteStopId(item) : undefined;
-        })
-        .filter((stopId): stopId is string => Boolean(stopId))
-        .filter((stopId, index, route) => route.indexOf(stopId) === index);
-      const remainingStops = completeStoreStopOrder(selectedStoreStopOrder)
-        .filter((stopId) => !cartStopOrder.includes(stopId));
-
-      if (cartStopOrder.length === 0) {
-        return;
-      }
-
-      setStoreStopOrders((current) => ({
-        ...current,
-        [selectedStoreId]: [...cartStopOrder, ...remainingStops]
-      }));
-      return;
-    }
-
-    const cartSectionOrder = productOrder
-      .map((productId) => itemById.get(productId)?.sectionId)
-      .filter((sectionId): sectionId is SectionId => Boolean(sectionId))
-      .filter((sectionId, index, route) => route.indexOf(sectionId) === index);
-    const remainingSections = completeSectionRoute(selectedStoreRoute)
-      .filter((sectionId) => !cartSectionOrder.includes(sectionId));
-
-    if (cartSectionOrder.length === 0) {
-      return;
-    }
-
-    setStoreItineraries((current) => ({
-      ...current,
-      [selectedStoreId]: [...cartSectionOrder, ...remainingSections]
-    }));
-  }
-
-  function moveStoreSection(routeItemId: string, direction: "up" | "down") {
-    if (selectedStoreId === "supercor") {
-      setStoreStopOrders((current) => {
-        const currentRoute = completeStoreStopOrder(current[selectedStoreId] ?? defaultSupercorStopOrder);
-        const sourceIndex = currentRoute.indexOf(routeItemId);
-        const targetIndex = direction === "up" ? sourceIndex - 1 : sourceIndex + 1;
-
-        if (sourceIndex < 0 || targetIndex < 0 || targetIndex >= currentRoute.length) {
-          return current;
-        }
-
-        const nextRoute = [...currentRoute];
-        nextRoute[sourceIndex] = currentRoute[targetIndex];
-        nextRoute[targetIndex] = routeItemId;
-
-        return {
-          ...current,
-          [selectedStoreId]: nextRoute
-        };
-      });
-      setStoreProductOrders((current) => ({
-        ...current,
-        [selectedStoreId]: []
-      }));
-      return;
-    }
-
-    if (!isSectionId(routeItemId)) {
-      return;
-    }
-
-    setStoreItineraries((current) => {
-      const currentRoute = completeSectionRoute(current[selectedStoreId] ?? defaultItinerary);
-      const sourceIndex = currentRoute.indexOf(routeItemId);
-      const targetIndex = direction === "up" ? sourceIndex - 1 : sourceIndex + 1;
-
-      if (sourceIndex < 0 || targetIndex < 0 || targetIndex >= currentRoute.length) {
-        return current;
-      }
-
-      const nextRoute = [...currentRoute];
-      nextRoute[sourceIndex] = currentRoute[targetIndex];
-      nextRoute[targetIndex] = routeItemId;
-
-      return {
-        ...current,
-        [selectedStoreId]: nextRoute
-      };
-    });
-    setStoreProductOrders((current) => ({
-      ...current,
-      [selectedStoreId]: []
-    }));
-  }
-
-  function undoLastChange() {
-    if (!lastChange) {
-      return;
-    }
-
-    setShoppingItems((current) => {
-      return current.map((item) => {
-        return item.id === lastChange.id ? { ...item, status: lastChange.status } : item;
-      });
-    });
-    setProducts((current) => {
-      return current.map((product) => {
-        return product.id === lastChange.id
-          ? {
-              ...product,
-              defaultQuantity: lastChange.defaultQuantity,
-              lastPickedAt: lastChange.lastPickedAt
-            }
-          : product;
-      });
-    });
-    setPickEvents((current) => current.filter((event) => event.productId !== lastChange.id));
-    setLastChange(null);
-  }
-
-  function saveInferredRoute() {
-    setStoreItineraries((current) => ({
-      ...current,
-      [selectedStoreId]: inferredRoute.sectionIds
-    }));
-    finalizeShoppingTrip();
-  }
-
-  function startShoppingTrip() {
-    if (!activeTripItemIds) {
-      setActiveTripItemIds(new Set(neededItems.map((item) => item.id)));
-    }
-    setScreen("shop");
-  }
-
   function navigateToMainScreen(nextScreen: MainScreen) {
-    if (nextScreen === "shop") {
-      startShoppingTrip();
-      return;
-    }
-
     setScreen(nextScreen);
-  }
-
-  function lockCheckoutList() {
-    endShoppingTrip();
-  }
-
-  function endShoppingTrip() {
-    const hasLearnedPicks = pickEvents.some((event) => event.action === "picked");
-
-    if (hasLearnedPicks) {
-      setScreen("summary");
-      return;
-    }
-
-    finalizeShoppingTrip();
-  }
-
-  function finalizeShoppingTrip() {
-    const tripItemIds = activeTripItemIds ?? lockedPickingIds;
-    setProducts((current) => mergeProductsWithShoppingItems(current, shoppingItems));
-    setShoppingItems((current) => buildNextShoppingList(current, tripItemIds));
-    setPickEvents([]);
-    setLastChange(null);
-    setIsCheckoutLocked(false);
-    setLockedPickingIds(null);
-    setActiveTripItemIds(null);
-    updateDepartmentFilter("all");
-    updateListSearch("");
-    updateAddSearch("");
-    setShoppingDoneNotice(true);
-    setScreen("list");
   }
 
   return (
@@ -943,7 +660,7 @@ export default function App() {
             activeScreen={screen}
             listCount={neededItems.length}
             addCount={addableProductCount}
-            cartCount={pickingItems.length}
+            cartCount={neededItems.length}
             isCheckoutLocked={isCheckoutLocked}
             showWelcome={!localUserSettings.smartStartEnabled}
             compact={false}
@@ -974,37 +691,9 @@ export default function App() {
 
         {screen === "settings" && <Redirect href="/settings" />}
 
-        {screen === "shop" && (
-          <ShopScreen
-            items={pickingItems}
-            stores={supermarketProfiles}
-            selectedStoreId={selectedStoreId}
-            storeRoute={selectedStoreRoute}
-            storeStopOrder={selectedStoreStopOrder}
-            onChangeStore={setSelectedStoreId}
-            onMoveStoreSection={moveStoreSection}
-            onPicked={(productId) => updateItemStatus(productId, "picked")}
-            onMissing={(productId) => updateItemStatus(productId, "missing")}
-            onMoveItem={movePickingItem}
-            onReorderItem={reorderPickingItem}
-            onUndo={undoLastChange}
-            onLockCheckout={lockCheckoutList}
-            canUndo={Boolean(lastChange)}
-            isCheckoutLocked={isCheckoutLocked}
-            compact={isCompactLayout}
-          />
-        )}
+        {screen === "shop" && <Redirect href="/shop" />}
 
-        {screen === "summary" && (
-          <SummaryScreen
-            route={inferredRoute.sectionIds}
-            confidence={inferredRoute.confidence}
-            storeName={selectedStore.name}
-            onSave={saveInferredRoute}
-            onDiscard={finalizeShoppingTrip}
-            onBack={() => setScreen("shop")}
-          />
-        )}
+        {screen === "summary" && <Redirect href="/shop/summary" />}
         </View>
 
         {screen !== "summary" && isCompactLayout && (
@@ -1012,7 +701,7 @@ export default function App() {
             activeScreen={screen}
             listCount={neededItems.length}
             addCount={addableProductCount}
-            cartCount={pickingItems.length}
+            cartCount={neededItems.length}
             isCheckoutLocked={isCheckoutLocked}
             showWelcome={!localUserSettings.smartStartEnabled}
             compact
@@ -1535,449 +1224,6 @@ function AddScreen({
       </ScrollView>
     </View>
   );
-}
-
-function ShopScreen({
-  items,
-  stores,
-  selectedStoreId,
-  storeRoute,
-  storeStopOrder,
-  onChangeStore,
-  onMoveStoreSection,
-  onPicked,
-  onMissing,
-  onMoveItem,
-  onReorderItem,
-  onUndo,
-  onLockCheckout,
-  canUndo,
-  isCheckoutLocked,
-  compact
-}: {
-  items: ShoppingItem[];
-  stores: SupermarketProfile[];
-  selectedStoreId: string;
-  storeRoute: SectionId[];
-  storeStopOrder: string[];
-  onChangeStore: (storeId: string) => void;
-  onMoveStoreSection: (routeItemId: string, direction: "up" | "down") => void;
-  onPicked: (productId: string) => void;
-  onMissing: (productId: string) => void;
-  onMoveItem: (productId: string, direction: "up" | "down", visibleItemIds: string[]) => void;
-  onReorderItem: (productId: string, targetVisibleIndex: number, visibleItemIds: string[]) => void;
-  onUndo: () => void;
-  onLockCheckout: () => void;
-  canUndo: boolean;
-  isCheckoutLocked: boolean;
-  compact: boolean;
-}) {
-  const visibleItemIds = items.map((item) => item.id);
-  const [draggingProductId, setDraggingProductId] = useState<string | null>(null);
-  const [hoveredDragProductId, setHoveredDragProductId] = useState<string | null>(null);
-  const [dragOffsetY, setDragOffsetY] = useState(0);
-  const [isRouteEditorOpen, setIsRouteEditorOpen] = useState(false);
-  const [isCheckoutConfirming, setIsCheckoutConfirming] = useState(false);
-  const dragStartPageY = useRef(0);
-  const dragVisibleItemIdsRef = useRef(visibleItemIds);
-  const checkoutConfirmTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const checkoutConfirmed = useRef(false);
-  const checkoutConfirmRequestId = useRef(0);
-  const routeEditorItems = getRouteEditorItems(selectedStoreId, storeRoute, storeStopOrder);
-  const dragSourceIndex = draggingProductId ? visibleItemIds.indexOf(draggingProductId) : -1;
-  const dragTargetIndex = dragSourceIndex >= 0
-    ? clampIndex(dragSourceIndex + Math.round(dragOffsetY / CART_DRAG_STEP), 0, items.length - 1)
-    : -1;
-
-  useEffect(() => {
-    if (draggingProductId === null) {
-      dragVisibleItemIdsRef.current = visibleItemIds;
-    }
-  }, [draggingProductId, visibleItemIds]);
-
-  useEffect(() => {
-    if (!isCheckoutConfirming) {
-      return;
-    }
-
-    const requestId = checkoutConfirmRequestId.current;
-    checkoutConfirmTimeout.current = setTimeout(() => {
-      if (checkoutConfirmRequestId.current !== requestId) {
-        return;
-      }
-
-      checkoutConfirmed.current = false;
-      setIsCheckoutConfirming(false);
-      checkoutConfirmTimeout.current = null;
-    }, 4000);
-
-    return () => {
-      clearCheckoutConfirmTimer();
-    };
-  }, [isCheckoutConfirming]);
-
-  useEffect(() => {
-    return () => {
-      clearCheckoutConfirmTimer();
-    };
-  }, []);
-
-  function clearCheckoutConfirmTimer() {
-    if (checkoutConfirmTimeout.current) {
-      clearTimeout(checkoutConfirmTimeout.current);
-      checkoutConfirmTimeout.current = null;
-    }
-  }
-
-  function cancelCheckoutConfirm() {
-    checkoutConfirmRequestId.current += 1;
-    clearCheckoutConfirmTimer();
-    checkoutConfirmed.current = false;
-    setIsCheckoutConfirming(false);
-  }
-
-  function requestCheckoutConfirm() {
-    clearCheckoutConfirmTimer();
-    checkoutConfirmRequestId.current += 1;
-    checkoutConfirmed.current = false;
-    setIsCheckoutConfirming(true);
-  }
-
-  function confirmCheckout() {
-    if (checkoutConfirmed.current) {
-      return;
-    }
-
-    checkoutConfirmed.current = true;
-    checkoutConfirmRequestId.current += 1;
-    clearCheckoutConfirmTimer();
-    setIsCheckoutConfirming(false);
-    onLockCheckout();
-  }
-
-  function renderCheckoutConfirmButton() {
-    if (Platform.OS === "web") {
-      return createElement(
-        "button",
-        {
-          type: "button",
-          onClick: confirmCheckout,
-          onMouseDown: confirmCheckout,
-          style: checkoutConfirmWebButtonStyle
-        },
-        createElement("span", { style: checkoutConfirmWebTextStyle }, "Terminar compra")
-      );
-    }
-
-    return (
-      <TouchableOpacity
-        style={styles.checkoutButtonCompact}
-        onPress={confirmCheckout}
-      >
-        <Text pointerEvents="none" style={styles.checkoutConfirmText}>Terminar compra</Text>
-      </TouchableOpacity>
-    );
-  }
-
-  function renderCheckoutCancelButton() {
-    if (Platform.OS === "web") {
-      return createElement(
-        "button",
-        {
-          type: "button",
-          onClick: cancelCheckoutConfirm,
-          style: checkoutConfirmWebCancelStyle
-        },
-        createElement("span", { style: checkoutConfirmWebCancelTextStyle }, "X")
-      );
-    }
-
-    return (
-      <TouchableOpacity style={styles.confirmCancelButton} onPress={cancelCheckoutConfirm}>
-        <Text style={styles.confirmCancelText}>X</Text>
-      </TouchableOpacity>
-    );
-  }
-
-  function renderCartTopActions() {
-    if (isCheckoutConfirming) {
-      return (
-        <View style={styles.cartTopActions}>
-          {renderCheckoutConfirmButton()}
-          {renderCheckoutCancelButton()}
-        </View>
-      );
-    }
-
-    return (
-      <View style={styles.cartTopActions}>
-        <TouchableOpacity
-          disabled={!canUndo}
-          style={[styles.undoButtonCompact, !canUndo && styles.smallActionDisabled]}
-          onPress={onUndo}
-        >
-          <Text style={[styles.undoButtonText, !canUndo && styles.smallActionTextDisabled]}>Desfazer última ação</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.checkoutButtonCompact} onPress={requestCheckoutConfirm}>
-          <Text style={styles.checkoutButtonText}>A pagar!</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
-  function finishDragging(productId: string, offsetY: number) {
-    const dragVisibleItemIds = dragVisibleItemIdsRef.current;
-    const sourceIndex = dragVisibleItemIds.indexOf(productId);
-    const targetIndex = sourceIndex >= 0
-      ? clampIndex(sourceIndex + Math.round(offsetY / CART_DRAG_STEP), 0, dragVisibleItemIds.length - 1)
-      : -1;
-
-    setDraggingProductId(null);
-    setDragOffsetY(0);
-    dragStartPageY.current = 0;
-
-    if (targetIndex >= 0 && targetIndex !== sourceIndex) {
-      onReorderItem(productId, targetIndex, dragVisibleItemIds);
-    }
-  }
-
-  function updateDragPosition(productId: string, pageY: number) {
-    setDragOffsetY(pageY - dragStartPageY.current);
-  }
-
-  const storeSelector = (
-    <View style={[styles.storeSelectorPanel, compact && styles.storeSelectorPanelCompact]}>
-      <View style={styles.storeSelectorHeader}>
-        <Text style={styles.sectionLabel}>Supermercado</Text>
-        <TouchableOpacity
-          style={[styles.routeEditorChip, compact && styles.routeEditorChipCompact]}
-          onPress={() => setIsRouteEditorOpen((current) => !current)}
-        >
-          <Text style={styles.routeEditorChipText}>
-            {isRouteEditorOpen ? "Fechar" : "Editar"}
-          </Text>
-        </TouchableOpacity>
-      </View>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={[styles.storeSelector, compact && styles.storeSelectorCompact]}
-      >
-        {stores.map((store) => {
-          const isActive = store.id === selectedStoreId;
-
-          return (
-            <TouchableOpacity
-              key={store.id}
-              style={[styles.storeButton, compact && styles.storeButtonCompact, isActive && styles.storeButtonActive]}
-              onPress={() => onChangeStore(store.id)}
-            >
-              <Text style={[styles.storeButtonTitle, isActive && styles.storeButtonTitleActive]}>{store.name}</Text>
-              <Text style={[styles.storeButtonDetail, isActive && styles.storeButtonDetailActive]}>{store.detail}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
-      {isRouteEditorOpen && (
-        <View style={styles.routeEditorPanel}>
-          <Text style={styles.routeEditorTitle}>Secções da loja</Text>
-          <ScrollView style={styles.routeEditorScroller} contentContainerStyle={styles.routeEditorList}>
-            {routeEditorItems.map((routeItem, index) => (
-              <View key={routeItem.id} style={styles.routeSectionRow}>
-                <Text style={styles.routeSectionNumber}>{index + 1}</Text>
-                <Text style={styles.routeSectionName}>{routeItem.name}</Text>
-                <View style={styles.routeSectionActions}>
-                  <TouchableOpacity
-                    disabled={index === 0}
-                    style={[styles.sortButton, index === 0 && styles.sortButtonDisabled]}
-                    onPress={() => onMoveStoreSection(routeItem.id, "up")}
-                  >
-                    <Text style={[styles.sortButtonText, index === 0 && styles.sortButtonTextDisabled]}>↑</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    disabled={index === routeEditorItems.length - 1}
-                    style={[styles.sortButton, index === routeEditorItems.length - 1 && styles.sortButtonDisabled]}
-                    onPress={() => onMoveStoreSection(routeItem.id, "down")}
-                  >
-                    <Text style={[styles.sortButtonText, index === routeEditorItems.length - 1 && styles.sortButtonTextDisabled]}>↓</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ))}
-          </ScrollView>
-        </View>
-      )}
-    </View>
-  );
-
-  if (items.length === 0) {
-    return (
-      <View style={styles.screen}>
-        {storeSelector}
-        {renderCartTopActions()}
-        <Text style={styles.title}>Compras terminadas</Text>
-        <Text style={styles.emptyText}>
-          {isCheckoutLocked
-            ? "A compra terminou. A próxima lista fica com o que faltou apanhar."
-            : "A lista vai ficar só com o que faltou apanhar."}
-        </Text>
-      </View>
-    );
-  }
-
-  return (
-    <View style={styles.screen}>
-      {storeSelector}
-
-      {renderCartTopActions()}
-
-      <Text style={styles.cartListTitle}>Produtos por ordem da loja</Text>
-
-      <ScrollView
-        style={styles.cartListScroller}
-        contentContainerStyle={styles.pickingList}
-        scrollEnabled={draggingProductId === null}
-      >
-        {items.map((item, index) => (
-          <View
-            key={item.id}
-            style={[
-              styles.pickRow,
-              getSectionCardStyle(item.sectionId),
-              draggingProductId === item.id && styles.pickRowDragging,
-              draggingProductId !== null && draggingProductId !== item.id && dragTargetIndex === index && styles.pickRowDropTarget,
-              draggingProductId === item.id && { transform: [{ translateY: dragOffsetY }] }
-            ]}
-          >
-            <View
-              style={[
-                styles.dragHandle,
-                hoveredDragProductId === item.id && styles.dragHandleHover,
-                draggingProductId === item.id && styles.dragHandleActive
-              ]}
-              onStartShouldSetResponder={() => true}
-              onMoveShouldSetResponder={() => true}
-              onResponderTerminationRequest={() => false}
-              onResponderGrant={(event) => {
-                setHoveredDragProductId(item.id);
-                setDraggingProductId(item.id);
-                setDragOffsetY(0);
-                dragStartPageY.current = event.nativeEvent.pageY;
-              }}
-              onResponderMove={(event) => {
-                updateDragPosition(item.id, event.nativeEvent.pageY);
-              }}
-              onResponderRelease={(event) => {
-                finishDragging(item.id, event.nativeEvent.pageY - dragStartPageY.current);
-                setHoveredDragProductId(null);
-              }}
-              onResponderTerminate={(event) => {
-                finishDragging(item.id, event.nativeEvent.pageY - dragStartPageY.current);
-                setHoveredDragProductId(null);
-              }}
-            >
-              <Text style={[styles.dragHandleText, draggingProductId === item.id && styles.dragHandleTextActive]}>|||</Text>
-            </View>
-            <View style={styles.pickRowInfo}>
-              <Text style={styles.compactName}>{item.name}</Text>
-              <Text style={styles.compactMeta}>{formatItemDetails(item)}</Text>
-              <Text style={styles.lastPickedText}>{getStoreStopName(selectedStoreId, item)}</Text>
-              {item.note && <Text style={styles.itemNote}>{item.note}</Text>}
-            </View>
-            <View style={styles.pickRowActions}>
-              <View style={styles.pickArrowRow}>
-                <TouchableOpacity
-                  disabled={index === 0}
-                  style={[styles.sortButton, index === 0 && styles.sortButtonDisabled]}
-                  onPress={() => onMoveItem(item.id, "up", visibleItemIds)}
-                >
-                  <Text style={[styles.sortButtonText, index === 0 && styles.sortButtonTextDisabled]}>↑</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  disabled={index === items.length - 1}
-                  style={[styles.sortButton, index === items.length - 1 && styles.sortButtonDisabled]}
-                  onPress={() => onMoveItem(item.id, "down", visibleItemIds)}
-                >
-                  <Text style={[styles.sortButtonText, index === items.length - 1 && styles.sortButtonTextDisabled]}>↓</Text>
-                </TouchableOpacity>
-              </View>
-              <TouchableOpacity style={styles.pickedSmallButton} onPress={() => onPicked(item.id)}>
-                <Text style={styles.pickedSmallButtonText}>Apanhado</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.missingSmallButton} onPress={() => onMissing(item.id)}>
-                <Text style={styles.missingSmallButtonText}>Falta</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        ))}
-      </ScrollView>
-    </View>
-  );
-}
-
-function SummaryScreen({
-  route,
-  confidence,
-  storeName,
-  onSave,
-  onDiscard,
-  onBack
-}: {
-  route: SectionId[];
-  confidence: number;
-  storeName: string;
-  onSave: () => void;
-  onDiscard: () => void;
-  onBack: () => void;
-}) {
-  const confidenceBand = getConfidenceBand(confidence);
-
-  return (
-    <View style={styles.screen}>
-      <Text style={styles.title}>Percurso aprendido</Text>
-      <Text style={styles.emptyText}>Supermercado: {storeName}</Text>
-      <Text
-        style={[
-          styles.preferencePill,
-          styles.summaryConfidencePill,
-          { backgroundColor: confidenceBand.backgroundColor, color: confidenceBand.color }
-        ]}
-      >
-        {confidenceBand.label} - Confiança {Math.round(confidence * 100)}%
-      </Text>
-      <ScrollView contentContainerStyle={styles.listContent}>
-        {route.map((sectionId, index) => (
-          <View key={sectionId} style={styles.routeRow}>
-            <Text style={styles.routeNumber}>{index + 1}</Text>
-            <Text style={styles.itemName}>{sectionNameById.get(sectionId) ?? sectionId}</Text>
-          </View>
-        ))}
-      </ScrollView>
-      <View style={styles.summaryActions}>
-        <TouchableOpacity style={styles.primaryButtonFull} onPress={onSave}>
-          <Text style={styles.primaryButtonText}>Guardar percurso</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.secondaryButtonFull} onPress={onDiscard}>
-          <Text style={styles.secondaryButtonText}>Terminar sem guardar</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.tertiaryButtonFull} onPress={onBack}>
-          <Text style={styles.tertiaryButtonText}>Voltar ao carrinho</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-}
-
-function getConfidenceBand(confidence: number): { label: string; color: string; backgroundColor: string } {
-  if (confidence >= 0.6) {
-    return { label: "Percurso fiável", color: "#1F7A4C", backgroundColor: "#E8F5EE" };
-  }
-
-  if (confidence >= 0.3) {
-    return { label: "Percurso parcial", color: "#8A5A00", backgroundColor: "#FFF4E0" };
-  }
-
-  return { label: "Poucos dados", color: "#A33E22", backgroundColor: "#FDECE8" };
 }
 
 function withStatus(product: Product): ShoppingItem {

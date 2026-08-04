@@ -1,1 +1,36 @@
-{}
+{
+  "tabTitle": "Comprar",
+  "store": {
+    "label": "Supermercado",
+    "editRoute": "Editar percurso"
+  },
+  "actions": {
+    "undo": "Desfazer última ação",
+    "picked": "Apanhado",
+    "missing": "Falta",
+    "drag": "Arrastar {{product}} para reordenar",
+    "moveUp": "Mover {{product}} para cima",
+    "moveDown": "Mover {{product}} para baixo"
+  },
+  "checkout": {
+    "request": "A pagar!",
+    "confirm": "Terminar compra",
+    "cancel": "Cancelar fim da compra",
+    "cancelSymbol": "X"
+  },
+  "empty": {
+    "title": "Compras terminadas",
+    "body": "A próxima lista fica só com o que faltou apanhar."
+  },
+  "list": {
+    "title": "Produtos por ordem da loja"
+  },
+  "routeEditor": {
+    "title": "Secções da loja",
+    "store": "Supermercado: {{store}}",
+    "close": "Fechar editor do percurso",
+    "closeSymbol": "X",
+    "moveUp": "Mover {{section}} para cima",
+    "moveDown": "Mover {{section}} para baixo"
+  }
+}

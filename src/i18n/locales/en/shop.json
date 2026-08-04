@@ -1,1 +1,36 @@
-{}
+{
+  "tabTitle": "Shop",
+  "store": {
+    "label": "Supermarket",
+    "editRoute": "Edit route"
+  },
+  "actions": {
+    "undo": "Undo last action",
+    "picked": "Picked",
+    "missing": "Missing",
+    "drag": "Drag {{product}} to reorder",
+    "moveUp": "Move {{product}} up",
+    "moveDown": "Move {{product}} down"
+  },
+  "checkout": {
+    "request": "Checkout",
+    "confirm": "Finish shopping",
+    "cancel": "Cancel checkout",
+    "cancelSymbol": "X"
+  },
+  "empty": {
+    "title": "Shopping complete",
+    "body": "The next list will contain only the products left to pick."
+  },
+  "list": {
+    "title": "Products in store order"
+  },
+  "routeEditor": {
+    "title": "Store sections",
+    "store": "Supermarket: {{store}}",
+    "close": "Close route editor",
+    "closeSymbol": "X",
+    "moveUp": "Move {{section}} up",
+    "moveDown": "Move {{section}} down"
+  }
+}

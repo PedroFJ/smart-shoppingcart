@@ -1,1 +1,15 @@
-{}
+{
+  "title": "Learned route",
+  "store": "Supermarket: {{store}}",
+  "confidence": {
+    "reliable": "Reliable route",
+    "partial": "Partial route",
+    "limited": "Limited data",
+    "value": "Confidence {{value}}%"
+  },
+  "actions": {
+    "save": "Save route",
+    "discard": "Finish without saving",
+    "back": "Back to cart"
+  }
+}

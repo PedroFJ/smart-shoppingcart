@@ -1,1 +1,15 @@
-{}
+{
+  "title": "Percurso aprendido",
+  "store": "Supermercado: {{store}}",
+  "confidence": {
+    "reliable": "Percurso fiável",
+    "partial": "Percurso parcial",
+    "limited": "Poucos dados",
+    "value": "Confiança {{value}}%"
+  },
+  "actions": {
+    "save": "Guardar percurso",
+    "discard": "Terminar sem guardar",
+    "back": "Voltar ao carrinho"
+  }
+}
