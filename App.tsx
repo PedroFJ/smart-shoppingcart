@@ -1705,7 +1705,6 @@ function ShopScreen({
       <TouchableOpacity
         style={styles.checkoutButtonCompact}
         onPress={confirmCheckout}
-        onPressIn={confirmCheckout}
       >
         <Text pointerEvents="none" style={styles.checkoutConfirmText}>Terminar compra</Text>
       </TouchableOpacity>

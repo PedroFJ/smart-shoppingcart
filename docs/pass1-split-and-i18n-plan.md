@@ -255,6 +255,14 @@ Brief: `docs/commit-5.6-ux-fixes-brief.md`. Supersedes `commit-3.6-ux-fixes-brie
 
 These items get moved a second time during Commits 6–8. That rework is accepted deliberately: they are all V1 spec violations the household feels today, and the sequence has already shown it can stall for ten weeks.
 
+### Commit 5.7 — Make the web bundle runnable; drop the touch-down confirm ⚠️ **blocker for Commit 6**
+
+Brief: `docs/commit-5.7-web-bundle-brief.md`. Added after validating Commits 5.5 and 5.6; executed as a corrective commit after Commit 6 because the brief existed only as an uncommitted file in the divergent OneDrive working copy.
+
+- Add a scoped Metro resolver override that selects Zustand's CommonJS build on web, removing `import.meta` from the classic-script Expo export.
+- Validate the exported directory without rewriting its HTML or JavaScript, then restate the affected 5.5, 5.6, and 6 browser results.
+- Remove `onPressIn` from the native checkout confirmation so a touch-down does not commit the trip before the user can slide away.
+
 ### Commit 6 — Extract **List** (`(app)/(tabs)/list.tsx`)
 
 First non-trivial screen. Brings `shoppingListStore` and `productsStore` online. The hidden row-tap-toggles-alternatives behaviour (App.tsx:1523) is **explicitly replaced** with a labelled switch on the row — this is part of the UX-issue-5 fix from the synthesis. Note: this is the first UX *change*, not just a refactor; flag it for Codex.
@@ -330,6 +338,8 @@ The following are deliberately not in W1+W2 and should not slip in during this w
 - **Scaffolding decay** (added 2026-08-03). The Commit-2/3 stores and catalogues are not inert while unused — they hold a snapshot that ages against the monolith's live writes. Commit 5.5 fixes the specific instance; the general lesson is that "scaffold now, consume later" is only safe when the scaffold has no persistence of its own. If a future commit scaffolds another persisted layer with no consumer, give it a watermark from day one.
 - **Ten weeks of drift** (added 2026-08-03). `App.tsx` and `src/state/*` have diverged since May. Every extraction commit from here reconciles two copies of the same logic rather than moving one. That cost was not in the original per-commit estimate; expect Commits 6–8 to run longer than Commits 1–3 did.
 - **Reimplementing a dependency to satisfy the typechecker** (added 2026-08-03). Commit 4 or 5 replaced `zustand/middleware`'s `persist` with a local shim rather than resolving the typing error against zustand v5. If a library import will not typecheck, the correct outcomes are: fix the types, pin a working version, or stop and flag it. Reimplementing the library silently is none of those, and it removed the versioning and rehydration guarantees the plan's persistence strategy depends on.
+- **A gate that only passes on a modified artifact has failed** (added 2026-08-03). Commits 5.5, 5.6, and 6 were initially recorded as web-validated against a bundle whose `<script>` tag the smoke harness rewrote. If validation requires changing the artifact, report a roadblock and block the commit instead of shipping with a footnote.
+- **Platform-forked UI needs platform-forked testing** (added 2026-08-03). When a control has separate web and native implementations, validate both branches or record the untested branch explicitly; a web test-tooling workaround must not be added to an untested native path.
 
 ### 6.1 Beta gates — not part of Pass 1, but scheduled before it
 
@@ -868,5 +878,42 @@ Flags / Roadblocks:
 Next recommended step:
 
 - Continue with the next split commit from the current plan after confirming Claude's latest contract.
+
+Signed-off-by: Codex <codex@openai.com>
+
+### 2026-08-04 Europe/Lisbon - Codex - Corrective Commit 5.7 web bundle
+
+Status: Commit 5.7 implementation complete in `C:\Users\PedroFreire\dev\smart-shoppingcart` as a corrective commit after Commit 6. The ordering error occurred because `docs/commit-5.7-web-bundle-brief.md` and its plan insertion existed only as uncommitted changes in the divergent OneDrive working copy; they were absent from the GitHub-backed clone used to execute Commit 6.
+
+Completed:
+
+- Added `metro.config.js` with the preferred package-scoped resolver override for `zustand` on web.
+- Extended the brief's preferred resolver context with `isESMImport: false`. On the installed Metro version, setting only `unstable_conditionNames: ["require"]` left Metro's independent ESM-import condition active and the first clean export still contained four `import.meta` references. The scoped CommonJS request removed all four. The global `unstable_conditionNames` and package-exports fallbacks were not used because the package-scoped option succeeded after this resolver correction.
+- Removed `onPressIn={confirmCheckout}` from the native checkout confirmation. The cancel button already used `onPress` only.
+- Kept the web confirmation's existing `onMouseDown` plus `onClick` behavior unchanged; the 5.7 contract explicitly allowed it to remain and the corrective commit does not broaden the confirmation UX change beyond the native touch-down defect.
+- Reconciled the missing 5.7 brief and plan section into the active GitHub-backed clone.
+
+Validation:
+
+- `npm.cmd run typecheck` passed.
+- `npm.cmd run i18n:check` passed with zero plain JSX text nodes found.
+- `node -e` Metro-config load check confirmed `config.resolver.resolveRequest` is callable.
+- `npx.cmd expo export --platform web --clear --output-dir dist-router-smoke` passed against the final resolver.
+- The exact exported script tag was `<script src="/_expo/static/js/web/entry-937e056736560934a9e8c94f4f23be1f.js" defer></script>`; it remained a classic deferred script and was not rewritten.
+- The final bundle contained `0` occurrences of `import.meta`.
+- Headless Edge served `dist-router-smoke` byte-for-byte with no HTML or JavaScript transformation. The final complete run reported zero runtime exceptions, zero console errors, and zero failures.
+- Revalidated Commit 5.5: Settings values persisted across reload, and List search persisted only in `settingsStore` without modifying the synced legacy app blob.
+- Revalidated Commit 5.6: three picked products reached Summary through the two-step checkout confirmation; `Falta` removed an item, undo restored it, and finalization returned it as `needed`; catalog deletion still required `Apagar mesmo`.
+- Revalidated Commit 6: seeded List items and relevant departments rendered; row-body clicks did not toggle alternatives; the labelled Switch toggled and persisted; quantity normalized on blur; notes persisted; `Adiar` removed a row; no-match search and `Limpar filtros` worked; voice-control visibility followed persisted settings across reload; the shopping-done notice cleared persistently; Welcome, Settings, and root routes remained reachable.
+- The temporary Edge profile, exported directory, and browser harness were removed after validation.
+
+Flags / Roadblocks:
+
+- Native device/simulator validation was unavailable. The source change removes the touch-down handler, but the press-hold-slide-off gesture remains explicitly unverified on iOS and Android.
+- The earlier 5.5, 5.6, and 6 browser passes that rewrote the script tag are superseded by the unmodified-artifact results above.
+
+Next recommended step:
+
+- Request and reconcile Claude's next contract from the GitHub-backed clone before starting the next split commit.
 
 Signed-off-by: Codex <codex@openai.com>
