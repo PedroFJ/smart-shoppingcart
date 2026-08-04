@@ -285,6 +285,14 @@ The route-editor inline panel (App.tsx:1971–1998) moves to `app/(app)/shop/[st
 
 ### Commit 8 — Extract **Add** (`(app)/(tabs)/add.tsx`)
 
+Brief: `docs/commit-8-add-brief.md`. **Runs as three commits: 7c, 8a and 8b.**
+
+> **Split, and preceded by a de-duplication pass (2026-08-04).** An audit at `a25c768` found that every extraction so far has copy-pasted its helpers out of the monolith rather than importing them: `getSectionCardStyle` now exists three times (App.tsx, list.tsx, shop.tsx) and the whole search cluster twice. All copies are still byte-identical except `sortShoppingItems`, which gained a `locale` parameter in `list.tsx` — so drift has already begun, in the one helper anybody touched.
+>
+> This is not cosmetic. Commit 11's definition of done deletes `App.tsx`; if the duplicates are still there, the copies silently *become* the implementation, with no shared origin to keep them in step. Add would make it a fourth copy.
+>
+> **7c** restores the "no trip" versus "empty trip" distinction that 7b lost when `tripStore` represented the trip id collections as `string[]` — see the brief §1. **8a** moves the duplicated helpers into `src/domain/search.ts`, `src/domain/productFormat.ts` and `src/ui/sectionStyles.ts`, and settles the `sortShoppingItems` divergence in favour of the locale-aware version. **8b** extracts Add itself, its two inline forms as modal routes, and the ~270-line product-classification cluster.
+
 Brings `productsStore` mutation actions online. The "Produto novo" inline form (App.tsx:1712–1750) moves to a dedicated modal route `app/(app)/products/new.tsx`. The card-edit inline form (App.tsx:1757–1819) moves to `app/(app)/products/[productId]/edit.tsx`. Both are presented modally via `expo-router`'s `presentation: 'modal'` option.
 
 This is also the right moment for the `FlatList` migration on the catalog grid (review §3.7) — Add is the screen that grows with the household's catalog, and it is the only one where the eager `ScrollView` + `.map()` will actually hurt.
